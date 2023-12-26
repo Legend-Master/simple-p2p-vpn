@@ -6,12 +6,11 @@ use std::time::Duration;
 use std::{net::UdpSocket, thread};
 use tap_windows::{Device, HARDWARE_ID};
 
-const INTERFACE_NAME: &str = "Simple Peer To Peer";
-
 #[cfg(target_os = "windows")]
 fn setup_tap() -> Device {
+    const INTERFACE_NAME: &str = "Simple Peer To Peer";
     // Try to open the device
-    let dev = Device::open(HARDWARE_ID, INTERFACE_NAME)
+    let tap_device = Device::open(HARDWARE_ID, INTERFACE_NAME)
         .or_else(|_| -> std::io::Result<_> {
             // The device does not exists...
             // try creating a new one
@@ -23,8 +22,8 @@ fn setup_tap() -> Device {
         })
         // Everything failed, just panic
         .expect("Failed to open device");
-    dev.up().expect("Failed to turn on device");
-    return dev;
+    tap_device.up().expect("Failed to turn on device");
+    return tap_device;
 }
 
 fn setup_socket() -> UdpSocket {
@@ -37,8 +36,10 @@ fn setup_socket() -> UdpSocket {
 
 fn main() {
     let tap_device = Mutex::new(setup_tap());
+    println!("TAP device started");
     let socket = setup_socket();
 
+    println!("Connecting to server...");
     socket
         .send(
             &bincode::serialize(&Message::Register {
@@ -60,6 +61,7 @@ fn main() {
                 .unwrap()
                 .set_ip(ip, mask)
                 .expect("Failed to set device ip");
+            println!("Connected, assign ip {}", ip);
         }
         Message::RegisterFail { reason } => {
             panic!("{}", reason);
