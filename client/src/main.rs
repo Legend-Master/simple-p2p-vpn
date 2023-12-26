@@ -1,5 +1,7 @@
+use clap::Parser;
 use shared::{receive, MacAddress, Message, ReceiveMessage};
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
+use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::Duration;
@@ -26,20 +28,57 @@ fn setup_tap() -> Device {
     return tap_device;
 }
 
-fn setup_socket() -> UdpSocket {
-    let socket = UdpSocket::bind("0.0.0.0:0").expect("couldn't bind to address");
-    socket
-        .connect("localhost:8000")
-        .expect("couldn't connect to address");
+fn setup_socket(server: &SocketAddrV4) -> UdpSocket {
+    // let bind_address = match server {
+    //     SocketAddr::V4(_) => "0.0.0.0:0",
+    //     SocketAddr::V6(_) => "[::]:0",
+    // };
+    let bind_address = "0.0.0.0:0";
+    let socket = UdpSocket::bind(bind_address).expect("couldn't bind to address");
+    socket.connect(server).expect("couldn't connect to address");
     return socket;
 }
 
+// https://stackoverflow.com/a/77047863/16993372
+fn resolve_host(hostname_port: &str) -> io::Result<SocketAddrV4> {
+    for socketaddr in hostname_port.to_socket_addrs()? {
+        match socketaddr {
+            SocketAddr::V4(address) => {
+                return Ok(address);
+            }
+            SocketAddr::V6(_) => {}
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AddrNotAvailable,
+        format!("Could not find destination {hostname_port}"),
+    ))
+}
+
+/// A simple peer to peer VPN client
+#[derive(Parser, Debug)]
+struct Cli {
+    #[arg(
+        // short,
+        // long,
+        // env,
+        value_name = "server",
+        help = "Server ip adrress like localhost:8000",
+        value_parser = resolve_host,
+    )]
+    server: SocketAddrV4,
+}
+
 fn main() {
+    let config = Cli::parse();
+
+    println!("Starting up TAP device");
     let tap_device = Mutex::new(setup_tap());
     println!("TAP device started");
-    let socket = setup_socket();
 
-    println!("Connecting to server...");
+    println!("Connecting to server {}", config.server);
+    let socket = setup_socket(&config.server);
+
     socket
         .send(
             &bincode::serialize(&Message::Register {

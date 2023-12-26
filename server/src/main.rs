@@ -1,7 +1,8 @@
+use clap::Parser;
 use shared::{receive, MacAddress, Message, ReceiveMessage, BROADCAST_MAC_ADDRESS};
 use std::{
     collections::HashSet,
-    net::{Ipv4Addr, SocketAddr, UdpSocket},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
     sync::Mutex,
     thread::{self, sleep},
     time::{Duration, SystemTime},
@@ -21,8 +22,26 @@ fn get_ip(ip_pool: &Mutex<HashSet<Ipv4Addr>>) -> Option<Ipv4Addr> {
     ip_pool.lock().unwrap().iter().next().cloned()
 }
 
+/// A simple peer to peer VPN client
+#[derive(Parser, Debug)]
+struct Cli {
+    /// Server ip adrress like localhost:8000
+    #[arg(
+        // short,
+        // long,
+        // env,
+        value_name = "port",
+        help = "Listening port",
+    )]
+    port: u16,
+}
+
 fn main() {
-    let socket = UdpSocket::bind("0.0.0.0:8000").expect("couldn't bind to address");
+    let config = Cli::parse();
+
+    let socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), config.port))
+        .expect("couldn't bind to address");
+    println!("Server listening at 0.0.0.0:{}", config.port);
 
     let mut ip_pool: HashSet<Ipv4Addr> = HashSet::new();
     for i in 0..=255 {
@@ -55,7 +74,7 @@ fn main() {
                 } = receive(&socket);
                 match message {
                     Message::Register { mac_address } => {
-                        dbg!("register");
+                        println!("In comming client from {}", source_address);
                         if let Some(ip) = get_ip(&ip_pool) {
                             socket
                                 .send_to(
