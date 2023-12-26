@@ -17,6 +17,10 @@ struct Connection {
     last_seen: SystemTime,
 }
 
+fn get_ip(ip_pool: &Mutex<HashSet<Ipv4Addr>>) -> Option<Ipv4Addr> {
+    ip_pool.lock().unwrap().iter().next().cloned()
+}
+
 fn main() {
     let socket = UdpSocket::bind("0.0.0.0:8000").expect("couldn't bind to address");
 
@@ -52,7 +56,7 @@ fn main() {
                 match message {
                     Message::Register { mac_address } => {
                         dbg!("register");
-                        if let Some(ip) = ip_pool.lock().unwrap().iter().next().cloned() {
+                        if let Some(ip) = get_ip(&ip_pool) {
                             socket
                                 .send_to(
                                     &bincode::serialize(&Message::RegisterSuccess {
