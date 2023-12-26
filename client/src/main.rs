@@ -1,5 +1,6 @@
 use shared::{receive, MacAddress, Message, ReceiveMessage};
 use std::io::{Read, Write};
+use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{net::UdpSocket, thread};
@@ -35,13 +36,13 @@ fn setup_socket() -> UdpSocket {
 }
 
 fn main() {
-    let mut tap_device = setup_tap();
+    let tap_device = Mutex::new(setup_tap());
     let socket = setup_socket();
 
     socket
         .send(
             &bincode::serialize(&Message::Register {
-                mac_address: tap_device.get_mac().unwrap(),
+                mac_address: tap_device.lock().unwrap().get_mac().unwrap(),
             })
             .unwrap(),
         )
@@ -55,6 +56,8 @@ fn main() {
         Message::RegisterSuccess { ip, mask } => {
             // Set the device ip
             tap_device
+                .lock()
+                .unwrap()
                 .set_ip(ip, mask)
                 .expect("Failed to set device ip");
         }
@@ -66,17 +69,21 @@ fn main() {
 
     thread::scope(|scope| {
         scope.spawn(|| {
-            let mtu = tap_device.get_mtu().unwrap_or(1500);
+            let mtu = tap_device.lock().unwrap().get_mtu().unwrap_or(1500);
             let mut buf = vec![0; mtu as usize];
             loop {
-                let bytes_read = tap_device.read(&mut buf).expect("Failed to read packet");
+                let bytes_read = tap_device
+                    .lock()
+                    .unwrap()
+                    .read(&mut buf)
+                    .expect("Failed to read packet");
                 // Invalid packet
                 if bytes_read < 12 {
                     continue;
                 }
                 // Ethernet header
-                let destination_mac_address: MacAddress = buf[0..5].try_into().unwrap();
-                let source_mac_address: MacAddress = buf[6..11].try_into().unwrap();
+                let destination_mac_address: MacAddress = buf[0..=5].try_into().unwrap();
+                let source_mac_address: MacAddress = buf[6..=11].try_into().unwrap();
 
                 let data = Message::Data {
                     source_mac_address,
@@ -94,24 +101,24 @@ fn main() {
                 .send(&bincode::serialize(&Message::Ping).unwrap())
                 .unwrap();
         });
-    });
 
-    loop {
-        let ReceiveMessage {
-            message,
-            source_address: _,
-        } = receive(&socket);
+        scope.spawn(|| loop {
+            let ReceiveMessage {
+                message,
+                source_address: _,
+            } = receive(&socket);
 
-        match message {
-            Message::Data {
-                payload,
-                destination_mac_address: _,
-                source_mac_address: _,
-            } => {
-                tap_device.write(&payload).unwrap();
+            match message {
+                Message::Data {
+                    payload,
+                    destination_mac_address: _,
+                    source_mac_address: _,
+                } => {
+                    tap_device.lock().unwrap().write(&payload).unwrap();
+                }
+                // Ignore invalid pakcets
+                _ => {}
             }
-            // Ignore invalid pakcets
-            _ => {}
-        }
-    }
+        });
+    });
 }

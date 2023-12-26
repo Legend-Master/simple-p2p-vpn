@@ -30,7 +30,7 @@ pub struct ReceiveMessage {
 }
 
 pub fn receive(socket: &UdpSocket) -> ReceiveMessage {
-    let mut buf = [0; 1000];
+    let mut buf = [0; 10000];
     let (bytes_read, source_address) = socket.recv_from(&mut buf).expect("Didn't receive data");
     let filled_buf = &mut buf[..bytes_read];
 
