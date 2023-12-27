@@ -11,7 +11,7 @@ pub enum Message {
     },
     RegisterSuccess {
         ip: Ipv4Addr,
-        mask: Ipv4Addr,
+        subnet_mask: Ipv4Addr,
     },
     RegisterFail {
         reason: String,

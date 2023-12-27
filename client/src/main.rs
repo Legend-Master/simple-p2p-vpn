@@ -93,7 +93,7 @@ fn main() {
         source_address: _,
     } = receive(&socket);
     match message {
-        Message::RegisterSuccess { ip, mask } => {
+        Message::RegisterSuccess { ip, subnet_mask: mask } => {
             // Set the device ip
             tap_device
                 .lock()

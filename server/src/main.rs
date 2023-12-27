@@ -1,15 +1,15 @@
 use clap::Parser;
 use shared::{receive, MacAddress, Message, ReceiveMessage, BROADCAST_MAC_ADDRESS};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
     sync::Mutex,
     thread::{self, sleep},
     time::{Duration, SystemTime},
 };
 
-const MASK: Ipv4Addr = Ipv4Addr::new(255, 255, 255, 0);
 const SUBNET: Ipv4Addr = Ipv4Addr::new(10, 123, 123, 0);
+const SUBNET_MASK: Ipv4Addr = Ipv4Addr::new(255, 255, 255, 0);
 
 struct Connection {
     ip: Ipv4Addr,
@@ -50,12 +50,12 @@ fn main() {
         ip_pool.insert(octets.into());
     }
     let ip_pool: Mutex<HashSet<Ipv4Addr>> = Mutex::new(ip_pool);
-    let connections: Mutex<Vec<Connection>> = Mutex::new(Vec::new());
+    let connections: Mutex<HashMap<SocketAddr, Connection>> = Mutex::new(HashMap::new());
 
     thread::scope(|scope| {
         scope.spawn(|| loop {
             sleep(Duration::from_secs(100));
-            connections.lock().unwrap().retain(|connection| {
+            connections.lock().unwrap().retain(|_, connection| {
                 let should_keep =
                     connection.last_seen.elapsed().unwrap() < Duration::from_secs(200);
                 if !should_keep {
@@ -80,18 +80,21 @@ fn main() {
                                 .send_to(
                                     &bincode::serialize(&Message::RegisterSuccess {
                                         ip,
-                                        mask: MASK,
+                                        subnet_mask: SUBNET_MASK,
                                     })
                                     .unwrap(),
                                     source_address,
                                 )
                                 .expect("can't send back response");
-                            connections.lock().unwrap().push(Connection {
-                                ip,
-                                mac_address,
-                                socket_address: source_address,
-                                last_seen: SystemTime::now(),
-                            });
+                            connections.lock().unwrap().insert(
+                                source_address,
+                                Connection {
+                                    ip,
+                                    mac_address,
+                                    socket_address: source_address,
+                                    last_seen: SystemTime::now(),
+                                },
+                            );
                             ip_pool.lock().unwrap().remove(&ip);
                         } else {
                             socket
@@ -110,33 +113,45 @@ fn main() {
                         destination_mac_address,
                         source_mac_address,
                     } => {
-                        for connection in connections.lock().unwrap().iter() {
-                            if destination_mac_address == BROADCAST_MAC_ADDRESS
-                                || connection.mac_address == destination_mac_address
-                            {
-                                socket
-                                    .send_to(
-                                        &bincode::serialize(&Message::Data {
-                                            destination_mac_address: source_mac_address,
-                                            source_mac_address: destination_mac_address,
-                                            payload: payload.clone(),
-                                        })
-                                        .unwrap(),
-                                        connection.socket_address,
-                                    )
-                                    .expect("can't send back response");
+                        let send = |socket_address: &SocketAddr| {
+                            socket
+                                .send_to(
+                                    &bincode::serialize(&Message::Data {
+                                        destination_mac_address: source_mac_address,
+                                        source_mac_address: destination_mac_address,
+                                        payload: payload.clone(),
+                                    })
+                                    .unwrap(),
+                                    socket_address,
+                                )
+                                .expect("can't send back response");
+                        };
+                        match destination_mac_address {
+                            BROADCAST_MAC_ADDRESS => {
+                                for (_, connection) in connections.lock().unwrap().iter() {
+                                    // Don't broadcast back to it self
+                                    if connection.mac_address != source_mac_address {
+                                        send(&connection.socket_address);
+                                    }
+                                }
                             }
+                            _ => match connections.lock().unwrap().get(&source_address) {
+                                Some(connection) => {
+                                    if connection.mac_address == destination_mac_address {
+                                        send(&connection.socket_address);
+                                    }
+                                }
+                                None => {}
+                            },
                         }
                         // dbg!(&payload);
                     }
-                    Message::Ping => {
-                        for connection in connections.lock().unwrap().iter_mut() {
-                            if connection.socket_address == source_address {
-                                connection.last_seen = SystemTime::now();
-                                break;
-                            }
+                    Message::Ping => match connections.lock().unwrap().get_mut(&source_address) {
+                        Some(connection) => {
+                            connection.last_seen = SystemTime::now();
                         }
-                    }
+                        None => {}
+                    },
                     // Ignore invalid pakcets
                     others => {
                         dbg!(others);
