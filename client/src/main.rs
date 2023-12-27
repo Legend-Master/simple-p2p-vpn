@@ -1,10 +1,13 @@
 use clap::Parser;
-use shared::{receive_until_success, send, MacAddress, Message, ReceiveMessage};
+use shared::{
+    is_multicast, receive_until_success, send, MacAddress, Message, ReceiveMessage,
+    MINIMUM_ETHERNET_FRAME_BYTES,
+};
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::Mutex;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{net::UdpSocket, thread};
 use tap_windows::{Device, HARDWARE_ID};
 
@@ -124,7 +127,10 @@ fn main() {
                 let destination_mac_address: MacAddress = buf[0..=5].try_into().unwrap();
                 let source_mac_address: MacAddress = buf[6..=11].try_into().unwrap();
 
-                // dbg!(&data);
+                println!(
+                    "TAP packet ({} bytes) received (source: {:?}, dest: {:?})",
+                    bytes_read, &source_mac_address, &destination_mac_address
+                );
                 send(
                     &socket,
                     &Message::Data {
@@ -149,11 +155,25 @@ fn main() {
 
             match message {
                 Message::Data {
-                    payload,
-                    destination_mac_address: _,
-                    source_mac_address: _,
+                    mut payload,
+                    destination_mac_address,
+                    source_mac_address,
                 } => {
-                    tap_device.lock().unwrap().write(&payload).unwrap();
+                    println!("received data packet");
+                    if !is_multicast(&destination_mac_address) {
+                        dbg!((&source_mac_address, &destination_mac_address));
+                        dbg!(&payload);
+                    }
+                    let time = SystemTime::now();
+                    if payload.len() < MINIMUM_ETHERNET_FRAME_BYTES.into() {
+                        payload.resize(MINIMUM_ETHERNET_FRAME_BYTES.into(), 0);
+                    }
+                    tap_device.lock().unwrap().write_all(&payload).unwrap();
+                    println!(
+                        "wrote {} bytes to TAP device in {:?}",
+                        payload.len(),
+                        time.elapsed().unwrap()
+                    );
                 }
                 // Ignore invalid pakcets
                 _ => {}
