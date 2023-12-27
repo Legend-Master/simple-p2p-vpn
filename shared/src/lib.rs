@@ -24,6 +24,16 @@ pub enum Message {
     },
 }
 
+pub fn send(socket: &UdpSocket, message: &Message) {
+    socket.send(&bincode::serialize(message).unwrap()).unwrap();
+}
+
+pub fn send_to(socket: &UdpSocket, message: &Message, to_address: &SocketAddr) {
+    socket
+        .send_to(&bincode::serialize(message).unwrap(), to_address)
+        .unwrap();
+}
+
 pub struct ReceiveMessage {
     pub message: Message,
     pub source_address: SocketAddr,

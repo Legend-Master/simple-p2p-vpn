@@ -1,5 +1,5 @@
 use clap::Parser;
-use shared::{receive, MacAddress, Message, ReceiveMessage};
+use shared::{receive, send, MacAddress, Message, ReceiveMessage};
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::Mutex;
@@ -79,26 +79,24 @@ fn main() {
     println!("Connecting to server {}", config.server);
     let socket = setup_socket(&config.server);
 
-    socket
-        .send(
-            &bincode::serialize(&Message::Register {
-                mac_address: tap_device.lock().unwrap().get_mac().unwrap(),
-            })
-            .unwrap(),
-        )
-        .unwrap();
+    send(
+        &socket,
+        &Message::Register {
+            mac_address: tap_device.lock().unwrap().get_mac().unwrap(),
+        },
+    );
 
     let ReceiveMessage {
         message,
         source_address: _,
     } = receive(&socket);
     match message {
-        Message::RegisterSuccess { ip, subnet_mask: mask } => {
+        Message::RegisterSuccess { ip, subnet_mask } => {
             // Set the device ip
             tap_device
                 .lock()
                 .unwrap()
-                .set_ip(ip, mask)
+                .set_ip(ip, subnet_mask)
                 .expect("Failed to set device ip");
             println!("Connected, assign ip {}", ip);
         }
@@ -126,21 +124,21 @@ fn main() {
                 let destination_mac_address: MacAddress = buf[0..=5].try_into().unwrap();
                 let source_mac_address: MacAddress = buf[6..=11].try_into().unwrap();
 
-                let data = Message::Data {
-                    source_mac_address,
-                    destination_mac_address,
-                    payload: (&buf[..bytes_read]).to_vec(),
-                };
                 // dbg!(&data);
-                socket.send(&bincode::serialize(&data).unwrap()).unwrap();
+                send(
+                    &socket,
+                    &Message::Data {
+                        source_mac_address,
+                        destination_mac_address,
+                        payload: (&buf[..bytes_read]).to_vec(),
+                    },
+                );
             }
         });
 
         scope.spawn(|| loop {
             sleep(Duration::from_secs(10));
-            socket
-                .send(&bincode::serialize(&Message::Ping).unwrap())
-                .unwrap();
+            send(&socket, &Message::Ping);
         });
 
         scope.spawn(|| loop {

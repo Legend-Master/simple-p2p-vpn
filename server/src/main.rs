@@ -1,5 +1,5 @@
 use clap::Parser;
-use shared::{receive, MacAddress, Message, ReceiveMessage, BROADCAST_MAC_ADDRESS};
+use shared::{receive, send_to, MacAddress, Message, ReceiveMessage, BROADCAST_MAC_ADDRESS};
 use std::{
     collections::{HashMap, HashSet},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
@@ -76,16 +76,14 @@ fn main() {
                     Message::Register { mac_address } => {
                         println!("In comming client from {}", source_address);
                         if let Some(ip) = get_ip(&ip_pool) {
-                            socket
-                                .send_to(
-                                    &bincode::serialize(&Message::RegisterSuccess {
-                                        ip,
-                                        subnet_mask: SUBNET_MASK,
-                                    })
-                                    .unwrap(),
-                                    source_address,
-                                )
-                                .expect("can't send back response");
+                            send_to(
+                                &socket,
+                                &Message::RegisterSuccess {
+                                    ip,
+                                    subnet_mask: SUBNET_MASK,
+                                },
+                                &source_address,
+                            );
                             connections.lock().unwrap().insert(
                                 source_address,
                                 Connection {
@@ -97,15 +95,13 @@ fn main() {
                             );
                             ip_pool.lock().unwrap().remove(&ip);
                         } else {
-                            socket
-                                .send_to(
-                                    &bincode::serialize(&Message::RegisterFail {
-                                        reason: "No avalible ip left".to_owned(),
-                                    })
-                                    .unwrap(),
-                                    source_address,
-                                )
-                                .expect("can't send back response");
+                            send_to(
+                                &socket,
+                                &Message::RegisterFail {
+                                    reason: "No avalible ip left".to_owned(),
+                                },
+                                &source_address,
+                            );
                         }
                     }
                     Message::Data {
@@ -114,17 +110,15 @@ fn main() {
                         source_mac_address,
                     } => {
                         let send = |socket_address: &SocketAddr| {
-                            socket
-                                .send_to(
-                                    &bincode::serialize(&Message::Data {
-                                        destination_mac_address: source_mac_address,
-                                        source_mac_address: destination_mac_address,
-                                        payload: payload.clone(),
-                                    })
-                                    .unwrap(),
-                                    socket_address,
-                                )
-                                .expect("can't send back response");
+                            send_to(
+                                &socket,
+                                &Message::Data {
+                                    destination_mac_address: source_mac_address,
+                                    source_mac_address: destination_mac_address,
+                                    payload: payload.clone(),
+                                },
+                                socket_address,
+                            );
                         };
                         match destination_mac_address {
                             BROADCAST_MAC_ADDRESS => {
