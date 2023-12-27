@@ -2,7 +2,20 @@ use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 
 pub type MacAddress = [u8; 6];
-pub const BROADCAST_MAC_ADDRESS: MacAddress = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+const BROADCAST_MAC_ADDRESS: MacAddress = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+const MULTICAST_ADDRESS_START: MacAddress = [0x01, 0x80, 0xC2, 0x00, 0x00, 0x00];
+
+pub fn is_broadcast_or_multicast(mac_adrress: &MacAddress) -> bool {
+    if *mac_adrress == BROADCAST_MAC_ADDRESS {
+        // Is broadcast
+        return true;
+    }
+    if mac_adrress[0..=2] == MULTICAST_ADDRESS_START[0..=2] {
+        // Is multicast
+        return true;
+    }
+    false
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Message {

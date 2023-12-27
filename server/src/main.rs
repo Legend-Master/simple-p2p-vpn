@@ -1,6 +1,6 @@
 use clap::Parser;
 use shared::{
-    receive_until_success, send_to, MacAddress, Message, ReceiveMessage, BROADCAST_MAC_ADDRESS,
+    receive_until_success, send_to, MacAddress, Message, ReceiveMessage, is_broadcast_or_multicast,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -76,8 +76,12 @@ fn main() {
                 } = receive_until_success(&socket);
                 match message {
                     Message::Register { mac_address } => {
-                        println!("Incomming client from {}", source_address);
+                        println!(
+                            "Incomming client {:?} from {}",
+                            &mac_address, &source_address
+                        );
                         if let Some(ip) = get_ip(&ip_pool) {
+                            println!("Assign IP {} to {}", &ip, &source_address);
                             send_to(
                                 &socket,
                                 &Message::RegisterSuccess {
@@ -111,34 +115,22 @@ fn main() {
                         destination_mac_address,
                         source_mac_address,
                     } => {
-                        let send = |socket_address: &SocketAddr| {
-                            send_to(
-                                &socket,
-                                &Message::Data {
-                                    destination_mac_address: source_mac_address,
-                                    source_mac_address: destination_mac_address,
-                                    payload: payload.clone(),
-                                },
-                                socket_address,
-                            );
-                        };
-                        match destination_mac_address {
-                            BROADCAST_MAC_ADDRESS => {
-                                for (_, connection) in connections.lock().unwrap().iter() {
-                                    // Don't broadcast back to it self
-                                    if connection.mac_address != source_mac_address {
-                                        send(&connection.socket_address);
-                                    }
-                                }
+                        for (_, connection) in connections.lock().unwrap().iter() {
+                            if (is_broadcast_or_multicast(&destination_mac_address)
+                                && connection.mac_address != source_mac_address)
+                                || connection.mac_address == destination_mac_address
+                            {
+                                println!("forwarding to {}", &connection.socket_address);
+                                send_to(
+                                    &socket,
+                                    &Message::Data {
+                                        destination_mac_address: source_mac_address,
+                                        source_mac_address: destination_mac_address,
+                                        payload: payload.clone(),
+                                    },
+                                    &connection.socket_address,
+                                );
                             }
-                            _ => match connections.lock().unwrap().get(&source_address) {
-                                Some(connection) => {
-                                    if connection.mac_address == destination_mac_address {
-                                        send(&connection.socket_address);
-                                    }
-                                }
-                                None => {}
-                            },
                         }
                         // dbg!(&payload);
                     }
