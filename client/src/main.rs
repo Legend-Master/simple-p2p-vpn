@@ -1,5 +1,5 @@
 use clap::Parser;
-use shared::{receive, send, MacAddress, Message, ReceiveMessage};
+use shared::{receive_until_success, send, MacAddress, Message, ReceiveMessage};
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::Mutex;
@@ -89,7 +89,7 @@ fn main() {
     let ReceiveMessage {
         message,
         source_address: _,
-    } = receive(&socket);
+    } = receive_until_success(&socket);
     match message {
         Message::RegisterSuccess { ip, subnet_mask } => {
             // Set the device ip
@@ -145,7 +145,7 @@ fn main() {
             let ReceiveMessage {
                 message,
                 source_address: _,
-            } = receive(&socket);
+            } = receive_until_success(&socket);
 
             match message {
                 Message::Data {

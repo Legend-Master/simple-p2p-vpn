@@ -39,13 +39,19 @@ pub struct ReceiveMessage {
     pub source_address: SocketAddr,
 }
 
-pub fn receive(socket: &UdpSocket) -> ReceiveMessage {
+pub fn receive_until_success(socket: &UdpSocket) -> ReceiveMessage {
     let mut buf = [0; 10000];
-    let (bytes_read, source_address) = socket.recv_from(&mut buf).expect("Didn't receive data");
-    let filled_buf = &mut buf[..bytes_read];
+    loop {
+        match socket.recv_from(&mut buf) {
+            Ok((bytes_read, source_address)) => {
+                let filled_buf = &mut buf[..bytes_read];
 
-    ReceiveMessage {
-        message: bincode::deserialize(&filled_buf).unwrap(),
-        source_address,
+                return ReceiveMessage {
+                    message: bincode::deserialize(&filled_buf).unwrap(),
+                    source_address,
+                };
+            }
+            Err(_) => {}
+        }
     }
 }
