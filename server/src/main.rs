@@ -1,5 +1,7 @@
 use clap::Parser;
-use shared::{receive_until_success, send_to, MacAddress, Message, ReceiveMessage, BROADCAST_MAC_ADDRESS};
+use shared::{
+    receive_until_success, send_to, MacAddress, Message, ReceiveMessage, BROADCAST_MAC_ADDRESS,
+};
 use std::{
     collections::{HashMap, HashSet},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
@@ -74,7 +76,7 @@ fn main() {
                 } = receive_until_success(&socket);
                 match message {
                     Message::Register { mac_address } => {
-                        println!("In comming client from {}", source_address);
+                        println!("Incomming client from {}", source_address);
                         if let Some(ip) = get_ip(&ip_pool) {
                             send_to(
                                 &socket,
