@@ -18,7 +18,7 @@ Some notes:
    # server <port>
    server 1234
    ```
-3. Run client
+3. Run client with administrator permission (required for setting up TAP device)
    ```powershell
    # client <server ip/domain>:<server port>
    client example.com:1234
