@@ -3,9 +3,8 @@ use shared::{
     is_multicast, receive_until_success, send, MacAddress, Message, ReceiveMessage,
     MINIMUM_ETHERNET_FRAME_BYTES,
 };
-use std::io::{self, Read, Write};
+use std::io;
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
-use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use std::{net::UdpSocket, thread};
@@ -76,7 +75,7 @@ fn main() {
     let config = Cli::parse();
 
     println!("Starting up TAP device");
-    let tap_device = Mutex::new(setup_tap());
+    let tap_device = setup_tap();
     println!("TAP device started");
 
     println!("Connecting to server {}", config.server);
@@ -85,7 +84,7 @@ fn main() {
     send(
         &socket,
         &Message::Register {
-            mac_address: tap_device.lock().unwrap().get_mac().unwrap(),
+            mac_address: tap_device.get_mac().unwrap(),
         },
     );
 
@@ -97,8 +96,6 @@ fn main() {
         Message::RegisterSuccess { ip, subnet_mask } => {
             // Set the device ip
             tap_device
-                .lock()
-                .unwrap()
                 .set_ip(ip, subnet_mask)
                 .expect("Failed to set device ip");
             println!("Connected, assign ip {}", ip);
@@ -111,14 +108,10 @@ fn main() {
 
     thread::scope(|scope| {
         scope.spawn(|| {
-            let mtu = tap_device.lock().unwrap().get_mtu().unwrap_or(1500);
+            let mtu = tap_device.get_mtu().unwrap_or(1500);
             let mut buf = vec![0; mtu as usize];
             loop {
-                let bytes_read = tap_device
-                    .lock()
-                    .unwrap()
-                    .read(&mut buf)
-                    .expect("Failed to read packet");
+                let bytes_read = tap_device.read_non_mut(&mut buf).expect("Failed to read packet");
                 // Invalid packet
                 if bytes_read < 12 {
                     continue;
@@ -168,7 +161,14 @@ fn main() {
                     if payload.len() < MINIMUM_ETHERNET_FRAME_BYTES.into() {
                         payload.resize(MINIMUM_ETHERNET_FRAME_BYTES.into(), 0);
                     }
-                    tap_device.lock().unwrap().write_all(&payload).unwrap();
+                    let len = tap_device.write_non_mut(&payload).unwrap();
+                    if len < payload.len() {
+                        println!(
+                            "{} bytes recieved but only {} bytes written to TAP",
+                            len,
+                            payload.len()
+                        );
+                    }
                     println!(
                         "wrote {} bytes to TAP device in {:?}",
                         payload.len(),

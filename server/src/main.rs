@@ -109,6 +109,7 @@ fn main() {
                         // dbg!(&payload);
                     }
                     Message::Ping => {
+                        println!("ping from {}", &source_address);
                         if let Some((_, connection)) = connections
                             .lock()
                             .unwrap()

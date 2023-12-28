@@ -12,3 +12,4 @@ shared = { path = "../shared" }
 [target.'cfg(windows)'.dependencies]
 # tap-windows = "*"
 tap-windows = { git = "https://github.com/Legend-Master/tap-windows" }
+# tap-windows = { path = "../../tap-windows" }
