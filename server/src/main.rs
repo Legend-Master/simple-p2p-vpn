@@ -86,7 +86,10 @@ fn main() {
                         payload,
                     } => {
                         let send = |connection: &Connection| {
-                            println!("forwarding to {}", &connection.socket_address);
+                            // println!(
+                            //     "forwarding to {} ({})",
+                            //     &connection.socket_address, &connection.ip
+                            // );
                             send_to(
                                 &socket,
                                 &Message::Data {
@@ -104,12 +107,16 @@ fn main() {
                                 }
                             }
                         } else {
-                            connections.lock().unwrap().get(&destination_mac_address);
+                            if let Some(connection) =
+                                connections.lock().unwrap().get(&destination_mac_address)
+                            {
+                                send(connection);
+                            }
                         }
                         // dbg!(&payload);
                     }
                     Message::Ping => {
-                        println!("ping from {}", &source_address);
+                        // println!("ping from {}", &source_address);
                         if let Some((_, connection)) = connections
                             .lock()
                             .unwrap()
@@ -137,7 +144,7 @@ fn register(
     ip_pool: &Mutex<HashSet<Ipv4Addr>>,
 ) {
     println!(
-        "Incomming client {:?} from {}",
+        "Incomming client {:x?} from {}",
         &mac_address, &source_address
     );
 
