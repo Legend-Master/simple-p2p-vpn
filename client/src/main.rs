@@ -1,12 +1,9 @@
 use clap::Parser;
-use shared::{
-    is_multicast, receive_until_success, send, MacAddress, Message, ReceiveMessage,
-    MINIMUM_ETHERNET_FRAME_BYTES,
-};
+use shared::{receive_until_success, send, MacAddress, Message, ReceiveMessage};
 use std::io;
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use std::{net::UdpSocket, thread};
 use tap_windows::{Device, HARDWARE_ID};
 
@@ -109,27 +106,29 @@ fn main() {
     thread::scope(|scope| {
         scope.spawn(|| {
             let mtu = tap_device.get_mtu().unwrap_or(1500);
-            let mut buf = vec![0; mtu as usize];
+            let mut buffer = vec![0; mtu as usize];
             loop {
-                let bytes_read = tap_device.read_non_mut(&mut buf).expect("Failed to read packet");
+                let bytes_read = tap_device
+                    .read_non_mut(&mut buffer)
+                    .expect("Failed to read packet");
                 // Invalid packet
                 if bytes_read < 12 {
                     continue;
                 }
                 // Ethernet header
-                let destination_mac_address: MacAddress = buf[0..=5].try_into().unwrap();
-                let source_mac_address: MacAddress = buf[6..=11].try_into().unwrap();
+                let destination_mac_address: MacAddress = buffer[0..=5].try_into().unwrap();
+                let source_mac_address: MacAddress = buffer[6..=11].try_into().unwrap();
 
-                println!(
-                    "TAP packet ({} bytes) received (source: {:?}, dest: {:?})",
-                    bytes_read, &source_mac_address, &destination_mac_address
-                );
+                // println!(
+                //     "TAP packet ({} bytes) received (source: {:x?}, dest: {:x?})",
+                //     bytes_read, &source_mac_address, &destination_mac_address
+                // );
                 send(
                     &socket,
                     &Message::Data {
                         source_mac_address,
                         destination_mac_address,
-                        payload: (&buf[..bytes_read]).to_vec(),
+                        payload: (&buffer[..bytes_read]).to_vec(),
                     },
                 );
             }
@@ -148,19 +147,18 @@ fn main() {
 
             match message {
                 Message::Data {
-                    mut payload,
-                    destination_mac_address,
-                    source_mac_address,
+                    payload,
+                    destination_mac_address: _,
+                    source_mac_address: _,
                 } => {
-                    println!("received data packet");
-                    if !is_multicast(&destination_mac_address) {
-                        dbg!((&source_mac_address, &destination_mac_address));
-                        dbg!(&payload);
-                    }
-                    let time = SystemTime::now();
-                    if payload.len() < MINIMUM_ETHERNET_FRAME_BYTES.into() {
-                        payload.resize(MINIMUM_ETHERNET_FRAME_BYTES.into(), 0);
-                    }
+                    // println!("received data packet");
+                    // if !is_multicast(&destination_mac_address) {
+                    //     println!(
+                    //         "source: {:x?}, dest: {:x?}",
+                    //         &source_mac_address, &destination_mac_address
+                    //     );
+                    // }
+                    // let time = SystemTime::now();
                     let len = tap_device.write_non_mut(&payload).unwrap();
                     if len < payload.len() {
                         println!(
@@ -169,11 +167,11 @@ fn main() {
                             payload.len()
                         );
                     }
-                    println!(
-                        "wrote {} bytes to TAP device in {:?}",
-                        payload.len(),
-                        time.elapsed().unwrap()
-                    );
+                    // println!(
+                    //     "wrote {} bytes to TAP device in {:?}",
+                    //     payload.len(),
+                    //     time.elapsed().unwrap()
+                    // );
                 }
                 // Ignore invalid pakcets
                 _ => {}

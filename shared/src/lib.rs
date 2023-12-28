@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 
-pub const MINIMUM_ETHERNET_FRAME_BYTES: u16 = 64;
-
 pub type MacAddress = [u8; 6];
 const BROADCAST_MAC_ADDRESS: MacAddress = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
 
