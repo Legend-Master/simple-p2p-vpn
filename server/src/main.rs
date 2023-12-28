@@ -18,10 +18,6 @@ struct Connection {
     last_seen: SystemTime,
 }
 
-fn get_ip(ip_pool: &Mutex<HashSet<Ipv4Addr>>) -> Option<Ipv4Addr> {
-    ip_pool.lock().unwrap().iter().next().cloned()
-}
-
 /// A simple peer to peer VPN client
 #[derive(Parser, Debug)]
 struct Cli {
@@ -54,6 +50,15 @@ fn main() {
 
     thread::scope(|scope| {
         scope.spawn(|| loop {
+            let ReceiveMessage {
+                message,
+                source_address,
+            } = receive_until_success(&socket);
+            handle_message(message, source_address, &connections, &socket, &ip_pool);
+        });
+
+        // Purge timed out connections
+        scope.spawn(|| loop {
             sleep(Duration::from_secs(100));
             connections.lock().unwrap().retain(|_, connection| {
                 let should_keep =
@@ -69,71 +74,38 @@ fn main() {
                 return should_keep;
             });
         });
-
-        scope.spawn(|| {
-            loop {
-                let ReceiveMessage {
-                    message,
-                    source_address,
-                } = receive_until_success(&socket);
-                match message {
-                    Message::Register { mac_address } => {
-                        register(mac_address, source_address, &connections, &socket, &ip_pool)
-                    }
-                    Message::Data {
-                        source_mac_address,
-                        destination_mac_address,
-                        payload,
-                    } => {
-                        let send = |connection: &Connection| {
-                            // println!(
-                            //     "forwarding to {} ({})",
-                            //     &connection.socket_address, &connection.ip
-                            // );
-                            send_to(
-                                &socket,
-                                &Message::Data {
-                                    source_mac_address,
-                                    destination_mac_address,
-                                    payload: payload.clone(),
-                                },
-                                &connection.socket_address,
-                            );
-                        };
-                        if is_multicast(&destination_mac_address) {
-                            for (_, connection) in connections.lock().unwrap().iter() {
-                                if connection.mac_address != source_mac_address {
-                                    send(connection);
-                                }
-                            }
-                        } else {
-                            if let Some(connection) =
-                                connections.lock().unwrap().get(&destination_mac_address)
-                            {
-                                send(connection);
-                            }
-                        }
-                        // dbg!(&payload);
-                    }
-                    Message::Ping => {
-                        // println!("ping from {}", &source_address);
-                        if let Some((_, connection)) = connections
-                            .lock()
-                            .unwrap()
-                            .iter_mut()
-                            .find(|(_, connection)| connection.socket_address == source_address)
-                        {
-                            connection.last_seen = SystemTime::now();
-                        }
-                    }
-                    // Ignore invalid pakcets
-                    others => {
-                        dbg!(others);
-                    }
-                }
-            }
-        });
     });
+}
+
+fn get_ip(ip_pool: &Mutex<HashSet<Ipv4Addr>>) -> Option<Ipv4Addr> {
+    ip_pool.lock().unwrap().iter().next().cloned()
+}
+
+// Reassign ip if it's a reconnection
+fn reassign_ip(
+    connections: &Mutex<HashMap<MacAddress, Connection>>,
+    mac_address: MacAddress,
+    source_address: SocketAddr,
+    socket: &UdpSocket,
+) -> bool {
+    let mut connections = connections.lock().unwrap();
+    match connections.get_mut(&mac_address) {
+        Some(connection) => {
+            connection.socket_address = source_address;
+            connection.last_seen = SystemTime::now();
+            send_to(
+                socket,
+                &Message::RegisterSuccess {
+                    ip: connection.ip,
+                    subnet_mask: SUBNET_MASK,
+                },
+                &source_address,
+            );
+            println!("Reassign IP {} to {}", &connection.ip, &source_address);
+            true
+        }
+        None => false,
+    }
 }
 
 fn register(
@@ -183,29 +155,66 @@ fn register(
     }
 }
 
-// Reassign ip if it's a reconnection
-fn reassign_ip(
-    connections: &Mutex<HashMap<MacAddress, Connection>>,
-    mac_address: MacAddress,
+fn handle_message(
+    message: Message,
     source_address: SocketAddr,
+    connections: &Mutex<HashMap<[u8; 6], Connection>>,
     socket: &UdpSocket,
-) -> bool {
-    let mut connections = connections.lock().unwrap();
-    match connections.get_mut(&mac_address) {
-        Some(connection) => {
-            connection.socket_address = source_address;
-            connection.last_seen = SystemTime::now();
-            send_to(
-                socket,
-                &Message::RegisterSuccess {
-                    ip: connection.ip,
-                    subnet_mask: SUBNET_MASK,
-                },
-                &source_address,
-            );
-            println!("Reassign IP {} to {}", &connection.ip, &source_address);
-            true
+    ip_pool: &Mutex<HashSet<Ipv4Addr>>,
+) {
+    match message {
+        Message::Register { mac_address } => {
+            register(mac_address, source_address, connections, socket, ip_pool);
         }
-        None => false,
+        Message::Data {
+            source_mac_address,
+            destination_mac_address,
+            payload,
+        } => {
+            let send = |connection: &Connection| {
+                // println!(
+                //     "forwarding to {} ({})",
+                //     &connection.socket_address, &connection.ip
+                // );
+                send_to(
+                    socket,
+                    &Message::Data {
+                        source_mac_address,
+                        destination_mac_address,
+                        payload: payload.clone(),
+                    },
+                    &connection.socket_address,
+                );
+            };
+            if is_multicast(&destination_mac_address) {
+                for (_, connection) in connections.lock().unwrap().iter() {
+                    if connection.mac_address != source_mac_address {
+                        send(connection);
+                    }
+                }
+            } else {
+                if let Some(connection) = connections.lock().unwrap().get(&destination_mac_address)
+                {
+                    send(connection);
+                }
+            }
+            // dbg!(&payload);
+        }
+        Message::Ping => {
+            // println!("ping from {}", &source_address);
+            if let Some((_, connection)) = connections
+                .lock()
+                .unwrap()
+                .iter_mut()
+                .find(|(_, connection)| connection.socket_address == source_address)
+            {
+                connection.last_seen = SystemTime::now();
+                send_to(socket, &Message::Pong, &connection.socket_address);
+            }
+        }
+        // Ignore invalid pakcets
+        others => {
+            dbg!(others);
+        }
     }
 }

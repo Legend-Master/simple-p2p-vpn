@@ -28,6 +28,7 @@ pub enum Message {
         reason: String,
     },
     Ping,
+    Pong,
     Data {
         source_mac_address: MacAddress,
         destination_mac_address: MacAddress,
@@ -41,6 +42,14 @@ pub fn send(socket: &UdpSocket, message: &Message) {
     while bytes_written < payload.len() {
         bytes_written += socket.send(payload).unwrap();
     }
+    // let bytes_written = socket.send(payload).unwrap();
+    // if bytes_written < payload.len() {
+    //     println!(
+    //         "should send {} bytes but only {} bytes sent",
+    //         payload.len(),
+    //         &bytes_written
+    //     );
+    // }
 }
 
 pub fn send_to(socket: &UdpSocket, message: &Message, to_address: &SocketAddr) {
@@ -49,11 +58,29 @@ pub fn send_to(socket: &UdpSocket, message: &Message, to_address: &SocketAddr) {
     while bytes_written < payload.len() {
         bytes_written += socket.send_to(payload, to_address).unwrap();
     }
+    // let bytes_written = socket.send_to(payload, to_address).unwrap();
+    // if bytes_written < payload.len() {
+    //     println!(
+    //         "should send {} bytes but only {} bytes sent",
+    //         payload.len(),
+    //         &bytes_written
+    //     );
+    // }
 }
 
 pub struct ReceiveMessage {
     pub message: Message,
     pub source_address: SocketAddr,
+}
+
+pub fn receive(socket: &UdpSocket) -> Result<ReceiveMessage, std::io::Error> {
+    let mut buffer = [0; 10000];
+    socket
+        .recv_from(&mut buffer)
+        .map(|(bytes_read, source_address)| ReceiveMessage {
+            message: bincode::deserialize(&buffer[..bytes_read]).unwrap(),
+            source_address,
+        })
 }
 
 pub fn receive_until_success(socket: &UdpSocket) -> ReceiveMessage {
@@ -65,5 +92,9 @@ pub fn receive_until_success(socket: &UdpSocket) -> ReceiveMessage {
                 source_address,
             };
         }
+        // else {
+        //     println!("recv_from error");
+        //     sleep(Duration::from_millis(100));
+        // }
     }
 }

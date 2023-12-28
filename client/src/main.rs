@@ -1,9 +1,9 @@
 use clap::Parser;
-use shared::{receive_until_success, send, MacAddress, Message, ReceiveMessage};
+use shared::{receive, receive_until_success, send, MacAddress, Message, ReceiveMessage};
 use std::io;
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{net::UdpSocket, thread};
 use tap_windows::{Device, HARDWARE_ID};
 
@@ -78,65 +78,49 @@ fn main() {
     println!("Connecting to server {}", config.server);
     let socket = setup_socket(&config.server);
 
-    send(
-        &socket,
-        &Message::Register {
-            mac_address: tap_device.get_mac().unwrap(),
-        },
-    );
+    register(&socket, &tap_device).unwrap();
 
-    let ReceiveMessage {
-        message,
-        source_address: _,
-    } = receive_until_success(&socket);
-    match message {
-        Message::RegisterSuccess { ip, subnet_mask } => {
-            // Set the device ip
-            tap_device
-                .set_ip(ip, subnet_mask)
-                .expect("Failed to set device ip");
-            println!("Connected, assign ip {}", ip);
-        }
-        Message::RegisterFail { reason } => {
-            panic!("{}", reason);
-        }
-        _ => unreachable!(),
-    }
+    let mac_address = tap_device.get_mac().unwrap();
 
     thread::scope(|scope| {
         scope.spawn(|| {
             let mtu = tap_device.get_mtu().unwrap_or(1500);
             let mut buffer = vec![0; mtu as usize];
             loop {
-                let bytes_read = tap_device
-                    .read_non_mut(&mut buffer)
-                    .expect("Failed to read packet");
-                // Invalid packet
-                if bytes_read < 12 {
-                    continue;
+                match tap_device.read_non_mut(&mut buffer) {
+                    Ok(bytes_read) => {
+                        // Invalid packet
+                        if bytes_read < 12 {
+                            println!("only {} bytes read from TAP, ignoring", &bytes_read);
+                            continue;
+                        }
+                        // Ethernet header
+                        let destination_mac_address: MacAddress = buffer[0..=5].try_into().unwrap();
+                        let source_mac_address: MacAddress = buffer[6..=11].try_into().unwrap();
+                        if source_mac_address != mac_address {
+                            println!("not device source mac? {:x?}", &source_mac_address);
+                            continue;
+                        };
+
+                        // println!(
+                        //     "TAP packet ({} bytes) received (source: {:x?}, dest: {:x?})",
+                        //     bytes_read, &source_mac_address, &destination_mac_address
+                        // );
+                        send(
+                            &socket,
+                            &Message::Data {
+                                source_mac_address,
+                                destination_mac_address,
+                                payload: (&buffer[..bytes_read]).to_vec(),
+                            },
+                        );
+                    }
+                    Err(error) => {
+                        println!("Can't read from TAP: {}", error);
+                        continue;
+                    }
                 }
-                // Ethernet header
-                let destination_mac_address: MacAddress = buffer[0..=5].try_into().unwrap();
-                let source_mac_address: MacAddress = buffer[6..=11].try_into().unwrap();
-
-                // println!(
-                //     "TAP packet ({} bytes) received (source: {:x?}, dest: {:x?})",
-                //     bytes_read, &source_mac_address, &destination_mac_address
-                // );
-                send(
-                    &socket,
-                    &Message::Data {
-                        source_mac_address,
-                        destination_mac_address,
-                        payload: (&buffer[..bytes_read]).to_vec(),
-                    },
-                );
             }
-        });
-
-        scope.spawn(|| loop {
-            sleep(Duration::from_secs(10));
-            send(&socket, &Message::Ping);
         });
 
         scope.spawn(|| loop {
@@ -177,5 +161,74 @@ fn main() {
                 _ => {}
             }
         });
+
+        scope.spawn(|| {
+            let socket_with_timeout = socket.try_clone().expect("couldn't clone the socket");
+            socket_with_timeout
+                .set_read_timeout(Some(Duration::from_secs(10)))
+                .unwrap();
+            loop {
+                sleep(Duration::from_secs(5));
+                ping(&socket_with_timeout, &tap_device);
+            }
+        });
     });
+}
+
+fn register(socket: &UdpSocket, tap_device: &Device) -> Result<(), Option<String>> {
+    send(
+        socket,
+        &Message::Register {
+            mac_address: tap_device.get_mac().unwrap(),
+        },
+    );
+    let ReceiveMessage {
+        message,
+        source_address: _,
+    } = receive_until_success(socket);
+    match message {
+        Message::RegisterSuccess { ip, subnet_mask } => {
+            // Set the device ip
+            tap_device
+                .set_ip(ip, subnet_mask)
+                .expect("Failed to set device ip");
+            println!("Connected, assign ip {}", ip);
+            Ok(())
+        }
+        Message::RegisterFail { reason } => Err(Some(reason)),
+        _ => Err(None),
+    }
+}
+
+fn ping(socket_with_timeout: &UdpSocket, tap_device: &Device) {
+    // Retry ping for 10 sec
+    while SystemTime::now().elapsed().unwrap() < Duration::from_secs(10) {
+        send(socket_with_timeout, &Message::Ping);
+        if let Ok(result) = receive(socket_with_timeout) {
+            if matches!(result.message, Message::Pong) {
+                // Pong received
+                return;
+            }
+        };
+    }
+    // If didn't get a pong than we probably lost connection to server
+    // try re-register
+    println!("Lost connection to server, trying to re-register");
+    if let Err(error) = register(&socket_with_timeout, &tap_device) {
+        // println!(
+        //     "Re-register failed: {}",
+        //     match error {
+        //         Some(reason) => reason,
+        //         None => "unkown reason".to_string(),
+        //     }
+        // );
+        panic!(
+            "Re-register failed: {}",
+            match error {
+                Some(reason) => reason,
+                None => "unkown reason".to_string(),
+            }
+        );
+    }
+    println!("Re-register success");
 }
