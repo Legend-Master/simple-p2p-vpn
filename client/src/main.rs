@@ -87,14 +87,8 @@ fn main() {
             handle_message(socket, tap_device, &register_sender, &pong_sender);
         });
 
-        if let Err(error) = register(socket, tap_device, &register_receiver) {
-            panic!(
-                "Re-register failed: {}",
-                match error {
-                    Some(reason) => reason,
-                    None => "unkown reason".to_string(),
-                }
-            );
+        if let Err(reason) = register(socket, tap_device, &register_receiver) {
+            panic!("Re-register failed: {}", reason);
         }
 
         scope.spawn(|| read_and_send(tap_device, socket));
@@ -203,7 +197,7 @@ fn register(
     socket: &UdpSocket,
     tap_device: &Device,
     register_receiver: &Receiver<RegisterResult>,
-) -> Result<(), Option<String>> {
+) -> Result<(), String> {
     let mac_address = MacAddr6::from(tap_device.get_mac().unwrap());
     // Retry register for 15 seconds
     while SystemTime::now().elapsed().unwrap() < Duration::from_secs(15) {
@@ -218,13 +212,13 @@ fn register(
                     return Ok(());
                 }
                 RegisterResult::Fail { reason } => {
-                    return Err(Some(reason));
+                    return Err(reason);
                 }
             },
             Err(_) => continue,
         };
     }
-    return Err(Some("Timeout".to_owned()));
+    return Err("Timeout".to_owned());
 }
 
 fn ping(
@@ -246,15 +240,9 @@ fn ping(
     // If didn't get a pong then we probably lost connection to server
     // try re-register
     println!("Lost connection to server, trying to re-register");
-    if let Err(error) = register(socket, tap_device, register_receiver) {
+    if let Err(reason) = register(socket, tap_device, register_receiver) {
         // println!(
-        panic!(
-            "Re-register failed: {}",
-            match error {
-                Some(reason) => reason,
-                None => "unkown reason".to_string(),
-            }
-        );
+        panic!("Re-register failed: {}", reason);
     }
     println!("Re-register success");
 }
