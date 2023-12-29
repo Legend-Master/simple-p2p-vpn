@@ -1,6 +1,6 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
-use shared::{receive_until_success, send, Message, ReceiveMessage};
+use shared::{receive_until_success, send, Message};
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::sleep;
@@ -129,17 +129,8 @@ fn main() {
 
         scope.spawn(move || {
             loop {
-                let ReceiveMessage {
-                    message,
-                    source_address: _,
-                } = receive_until_success(&socket);
-
-                match message {
-                    Message::Data {
-                        payload,
-                        destination_mac_address: _,
-                        source_mac_address: _,
-                    } => {
+                match receive_until_success(&socket).message {
+                    Message::Data { payload, .. } => {
                         // println!("received data packet");
                         // if !destination_mac_address.is_multicast() {
                         //     println!(
@@ -185,11 +176,7 @@ fn register(socket: &UdpSocket, tap_device: &Device) -> Result<(), Option<String
             mac_address: tap_device.get_mac().unwrap().try_into().unwrap(),
         },
     );
-    let ReceiveMessage {
-        message,
-        source_address: _,
-    } = receive_until_success(socket);
-    match message {
+    match receive_until_success(socket).message {
         Message::RegisterSuccess { ip, subnet_mask } => {
             // Set the device ip
             tap_device

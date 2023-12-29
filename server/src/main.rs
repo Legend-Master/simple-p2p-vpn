@@ -34,42 +34,30 @@ fn main() {
         .expect("couldn't bind to address");
     println!("Server listening at 0.0.0.0:{}", config.port);
 
+    let ip_pool: Mutex<HashSet<Ipv4Addr>> = Mutex::new(generate_ip_pool());
+    let connections: Mutex<HashMap<MacAddr6, Connection>> = Mutex::new(HashMap::new());
+
+    thread::scope(|scope| {
+        scope.spawn(|| loop {
+            handle_message(&socket, &connections, &ip_pool);
+        });
+
+        // Purge timed out connections
+        scope.spawn(|| loop {
+            sleep(Duration::from_secs(100));
+            purge_timedout_connections(&connections, &ip_pool);
+        });
+    });
+}
+
+fn generate_ip_pool() -> HashSet<Ipv4Addr> {
     let mut ip_pool: HashSet<Ipv4Addr> = HashSet::new();
     for i in 0..=255 {
         let mut octets = SUBNET.octets();
         *octets.last_mut().unwrap() = i;
         ip_pool.insert(octets.into());
     }
-    let ip_pool: Mutex<HashSet<Ipv4Addr>> = Mutex::new(ip_pool);
-    let connections: Mutex<HashMap<MacAddr6, Connection>> = Mutex::new(HashMap::new());
-
-    thread::scope(|scope| {
-        scope.spawn(|| loop {
-            let ReceiveMessage {
-                message,
-                source_address,
-            } = receive_until_success(&socket);
-            handle_message(message, source_address, &connections, &socket, &ip_pool);
-        });
-
-        // Purge timed out connections
-        scope.spawn(|| loop {
-            sleep(Duration::from_secs(100));
-            connections.lock().unwrap().retain(|_, connection| {
-                let should_keep =
-                    connection.last_seen.elapsed().unwrap() < Duration::from_secs(200);
-                if !should_keep {
-                    // Release ip from peer
-                    ip_pool.lock().unwrap().insert(connection.ip);
-                    println!(
-                        "purged {} from {}",
-                        connection.ip, connection.socket_address
-                    );
-                }
-                return should_keep;
-            });
-        });
-    });
+    ip_pool
 }
 
 fn get_ip(ip_pool: &Mutex<HashSet<Ipv4Addr>>) -> Option<Ipv4Addr> {
@@ -148,12 +136,14 @@ fn register(
 }
 
 fn handle_message(
-    message: Message,
-    source_address: SocketAddr,
-    connections: &Mutex<HashMap<MacAddr6, Connection>>,
     socket: &UdpSocket,
+    connections: &Mutex<HashMap<MacAddr6, Connection>>,
     ip_pool: &Mutex<HashSet<Ipv4Addr>>,
 ) {
+    let ReceiveMessage {
+        message,
+        source_address,
+    } = receive_until_success(&socket);
     match message {
         Message::Register { mac_address } => {
             register(mac_address, source_address, connections, socket, ip_pool);
@@ -210,4 +200,22 @@ fn handle_message(
             dbg!(others);
         }
     }
+}
+
+fn purge_timedout_connections(
+    connections: &Mutex<HashMap<MacAddr6, Connection>>,
+    ip_pool: &Mutex<HashSet<Ipv4Addr>>,
+) {
+    connections.lock().unwrap().retain(|_, connection| {
+        let should_keep = connection.last_seen.elapsed().unwrap() < Duration::from_secs(200);
+        if !should_keep {
+            // Release ip from peer
+            ip_pool.lock().unwrap().insert(connection.ip);
+            println!(
+                "purged {} from {}",
+                connection.ip, connection.socket_address
+            );
+        }
+        return should_keep;
+    });
 }
