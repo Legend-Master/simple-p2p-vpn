@@ -64,14 +64,6 @@ fn resolve_host(hostname_port: &str) -> Result<SocketAddrV4, String> {
 /// A simple peer to peer VPN client
 #[derive(FromArgs)]
 struct Cli {
-    // #[arg(
-    //     // short,
-    //     // long,
-    //     // env,
-    //     value_name = "server",
-    //     help = "Server ip adrress like localhost:8000",
-    //     value_parser = resolve_host,
-    // )]
     /// server ip adrress like localhost:8000
     #[argh(positional, from_str_fn(resolve_host))]
     server: SocketAddrV4,
@@ -227,12 +219,6 @@ fn ping(socket: &UdpSocket, tap_device: &Device, pong_receiver: &Receiver<()>) {
     println!("Lost connection to server, trying to re-register");
     if let Err(error) = register(&socket, &tap_device) {
         // println!(
-        //     "Re-register failed: {}",
-        //     match error {
-        //         Some(reason) => reason,
-        //         None => "unkown reason".to_string(),
-        //     }
-        // );
         panic!(
             "Re-register failed: {}",
             match error {
