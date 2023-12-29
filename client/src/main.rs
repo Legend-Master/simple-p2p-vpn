@@ -2,7 +2,7 @@ use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{get_mac_addresses, receive_until_success, send, Message};
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use std::{net::UdpSocket, thread};
@@ -97,24 +97,24 @@ fn main() {
     });
 }
 
-fn recieve_and_write(socket: &UdpSocket, tap_device: &Device, pong_sender: &mpsc::Sender<()>) {
+fn recieve_and_write(socket: &UdpSocket, tap_device: &Device, pong_sender: &Sender<()>) {
     match receive_until_success(&socket).message {
         Message::Data { ethernet_frame } => {
             // println!("received data packet");
-            // if !destination_mac_address.is_multicast() {
-            //     println!(
-            //         "source: {}, dest: {}",
-            //         &source_mac_address, &destination_mac_address
-            //     );
-            // }
             // let time = SystemTime::now();
-            let len = tap_device.write_non_mut(&ethernet_frame).unwrap();
-            if len < ethernet_frame.len() {
-                println!(
-                    "{} bytes recieved but only {} bytes written to TAP",
-                    len,
-                    ethernet_frame.len()
-                );
+            match tap_device.write_non_mut(&ethernet_frame) {
+                Ok(bytes_written) => {
+                    if bytes_written < ethernet_frame.len() {
+                        println!(
+                            "{} bytes recieved but only {} bytes written to TAP",
+                            bytes_written,
+                            ethernet_frame.len()
+                        );
+                    }
+                }
+                Err(error) => {
+                    println!("Can't write to TAP with error: {}", error);
+                }
             }
             // println!(
             //     "wrote {} bytes to TAP device in {:?}",
