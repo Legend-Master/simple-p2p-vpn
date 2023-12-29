@@ -1,7 +1,8 @@
 use clap::Parser;
-use shared::{receive, receive_until_success, send, MacAddress, Message, ReceiveMessage};
+use shared::{receive_until_success, send, MacAddress, Message, ReceiveMessage};
 use std::io;
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
+use std::sync::mpsc::{self, Receiver};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use std::{net::UdpSocket, thread};
@@ -72,18 +73,19 @@ fn main() {
     let config = Cli::parse();
 
     println!("Starting up TAP device");
-    let tap_device = setup_tap();
+    let tap_device = &setup_tap();
     println!("TAP device started");
 
     println!("Connecting to server {}", config.server);
-    let socket = setup_socket(&config.server);
+    let socket = &setup_socket(&config.server);
 
     register(&socket, &tap_device).unwrap();
 
-    let mac_address = tap_device.get_mac().unwrap();
+    let (pong_sender, pong_receiver) = mpsc::channel();
 
     thread::scope(|scope| {
         scope.spawn(|| {
+            let mac_address = tap_device.get_mac().unwrap();
             let mtu = tap_device.get_mtu().unwrap_or(1500);
             let mut buffer = vec![0; mtu as usize];
             loop {
@@ -123,54 +125,53 @@ fn main() {
             }
         });
 
-        scope.spawn(|| loop {
-            let ReceiveMessage {
-                message,
-                source_address: _,
-            } = receive_until_success(&socket);
+        scope.spawn(move || {
+            loop {
+                let ReceiveMessage {
+                    message,
+                    source_address: _,
+                } = receive_until_success(&socket);
 
-            match message {
-                Message::Data {
-                    payload,
-                    destination_mac_address: _,
-                    source_mac_address: _,
-                } => {
-                    // println!("received data packet");
-                    // if !is_multicast(&destination_mac_address) {
-                    //     println!(
-                    //         "source: {:x?}, dest: {:x?}",
-                    //         &source_mac_address, &destination_mac_address
-                    //     );
-                    // }
-                    // let time = SystemTime::now();
-                    let len = tap_device.write_non_mut(&payload).unwrap();
-                    if len < payload.len() {
-                        println!(
-                            "{} bytes recieved but only {} bytes written to TAP",
-                            len,
-                            payload.len()
-                        );
+                match message {
+                    Message::Data {
+                        payload,
+                        destination_mac_address: _,
+                        source_mac_address: _,
+                    } => {
+                        // println!("received data packet");
+                        // if !is_multicast(&destination_mac_address) {
+                        //     println!(
+                        //         "source: {:x?}, dest: {:x?}",
+                        //         &source_mac_address, &destination_mac_address
+                        //     );
+                        // }
+                        // let time = SystemTime::now();
+                        let len = tap_device.write_non_mut(&payload).unwrap();
+                        if len < payload.len() {
+                            println!(
+                                "{} bytes recieved but only {} bytes written to TAP",
+                                len,
+                                payload.len()
+                            );
+                        }
+                        // println!(
+                        //     "wrote {} bytes to TAP device in {:?}",
+                        //     payload.len(),
+                        //     time.elapsed().unwrap()
+                        // );
                     }
-                    // println!(
-                    //     "wrote {} bytes to TAP device in {:?}",
-                    //     payload.len(),
-                    //     time.elapsed().unwrap()
-                    // );
+                    Message::Pong => {
+                        pong_sender.send(()).unwrap();
+                    }
+                    // Ignore invalid pakcets
+                    _ => {}
                 }
-                // Ignore invalid pakcets
-                _ => {}
             }
         });
 
-        scope.spawn(|| {
-            let socket_with_timeout = socket.try_clone().expect("couldn't clone the socket");
-            socket_with_timeout
-                .set_read_timeout(Some(Duration::from_secs(10)))
-                .unwrap();
-            loop {
-                sleep(Duration::from_secs(5));
-                ping(&socket_with_timeout, &tap_device);
-            }
+        scope.spawn(move || loop {
+            sleep(Duration::from_secs(5));
+            ping(&socket, &tap_device, &pong_receiver);
         });
     });
 }
@@ -200,21 +201,21 @@ fn register(socket: &UdpSocket, tap_device: &Device) -> Result<(), Option<String
     }
 }
 
-fn ping(socket_with_timeout: &UdpSocket, tap_device: &Device) {
-    // Retry ping for 10 sec
-    while SystemTime::now().elapsed().unwrap() < Duration::from_secs(10) {
-        send(socket_with_timeout, &Message::Ping);
-        if let Ok(result) = receive(socket_with_timeout) {
-            if matches!(result.message, Message::Pong) {
-                // Pong received
-                return;
-            }
-        };
+fn ping(socket: &UdpSocket, tap_device: &Device, pong_receiver: &Receiver<()>) {
+    // Retry ping for 15 seconds
+    while SystemTime::now().elapsed().unwrap() < Duration::from_secs(15) {
+        send(socket, &Message::Ping);
+        clear_receiver(&pong_receiver);
+        if let Ok(_) = pong_receiver.recv_timeout(Duration::from_secs(5)) {
+            // Pong received
+            println!("Pong received");
+            return;
+        }
     }
-    // If didn't get a pong than we probably lost connection to server
+    // If didn't get a pong then we probably lost connection to server
     // try re-register
     println!("Lost connection to server, trying to re-register");
-    if let Err(error) = register(&socket_with_timeout, &tap_device) {
+    if let Err(error) = register(&socket, &tap_device) {
         // println!(
         //     "Re-register failed: {}",
         //     match error {
@@ -231,4 +232,8 @@ fn ping(socket_with_timeout: &UdpSocket, tap_device: &Device) {
         );
     }
     println!("Re-register success");
+}
+
+fn clear_receiver<T>(receiver: &Receiver<T>) {
+    while let Ok(_) = receiver.try_recv() {}
 }
