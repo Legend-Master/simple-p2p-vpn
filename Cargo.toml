@@ -1,7 +1,10 @@
 [workspace]
 resolver = "2"
-members = [
-    "client",
-    "server",
-    "shared",
-]
+members = ["client", "server", "shared"]
+
+[profile.release]
+lto = true        # Enable Link Time Optimization
+strip = true      # Automatically strip symbols from the binary.
+# opt-level = "z"   # Optimize for size.
+# codegen-units = 1 # Reduce number of codegen units to increase optimizations.
+# panic = "abort"   # Abort on panic
