@@ -4,23 +4,12 @@ use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Message {
-    Register {
-        mac_address: MacAddr6,
-    },
-    RegisterSuccess {
-        ip: Ipv4Addr,
-        subnet_mask: Ipv4Addr,
-    },
-    RegisterFail {
-        reason: String,
-    },
+    Register { mac_address: MacAddr6 },
+    RegisterSuccess { ip: Ipv4Addr, subnet_mask: Ipv4Addr },
+    RegisterFail { reason: String },
     Ping,
     Pong,
-    Data {
-        source_mac_address: MacAddr6,
-        destination_mac_address: MacAddr6,
-        payload: Vec<u8>,
-    },
+    Data { ethernet_frame: Vec<u8> },
 }
 
 pub fn get_mac_addresses(ethernet_frame: &[u8]) -> Result<(MacAddr6, MacAddr6), ()> {

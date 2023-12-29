@@ -1,6 +1,6 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
-use shared::{receive_until_success, send_to, Message, ReceiveMessage};
+use shared::{get_mac_addresses, receive_until_success, send_to, Message, ReceiveMessage};
 use std::{
     collections::{HashMap, HashSet},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
@@ -148,40 +148,9 @@ fn handle_message(
         Message::Register { mac_address } => {
             register(mac_address, source_address, connections, socket, ip_pool);
         }
-        Message::Data {
-            source_mac_address,
-            destination_mac_address,
-            payload,
-        } => {
-            let send = |connection: &Connection| {
-                // println!(
-                //     "forwarding to {} ({})",
-                //     &connection.socket_address, &connection.ip
-                // );
-                send_to(
-                    socket,
-                    &Message::Data {
-                        source_mac_address,
-                        destination_mac_address,
-                        payload: payload.clone(),
-                    },
-                    &connection.socket_address,
-                );
-            };
-            // Broadcast is a special type of multicast
-            if destination_mac_address.is_multicast() {
-                for (_, connection) in connections.lock().unwrap().iter() {
-                    if connection.mac_address != source_mac_address {
-                        send(connection);
-                    }
-                }
-            } else {
-                if let Some(connection) = connections.lock().unwrap().get(&destination_mac_address)
-                {
-                    send(connection);
-                }
-            }
-            // dbg!(&payload);
+        Message::Data { ethernet_frame } => {
+            forward_data(ethernet_frame, socket, connections);
+            // dbg!(&ethernet_frame);
         }
         Message::Ping => {
             // println!("ping from {}", &source_address);
@@ -198,6 +167,40 @@ fn handle_message(
         // Ignore invalid pakcets
         others => {
             dbg!(others);
+        }
+    }
+}
+
+fn forward_data(
+    ethernet_frame: Vec<u8>,
+    socket: &UdpSocket,
+    connections: &Mutex<HashMap<MacAddr6, Connection>>,
+) {
+    if let Ok((source_mac_address, destination_mac_address)) = get_mac_addresses(&ethernet_frame) {
+        let send = |connection: &Connection| {
+            // println!(
+            //     "forwarding to {} ({})",
+            //     &connection.socket_address, &connection.ip
+            // );
+            send_to(
+                socket,
+                &Message::Data {
+                    ethernet_frame: ethernet_frame.clone(),
+                },
+                &connection.socket_address,
+            );
+        };
+        // Broadcast is a special type of multicast
+        if destination_mac_address.is_multicast() {
+            for (_, connection) in connections.lock().unwrap().iter() {
+                if connection.mac_address != source_mac_address {
+                    send(connection);
+                }
+            }
+        } else {
+            if let Some(connection) = connections.lock().unwrap().get(&destination_mac_address) {
+                send(connection);
+            }
         }
     }
 }

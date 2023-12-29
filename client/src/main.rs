@@ -99,7 +99,7 @@ fn main() {
 
 fn recieve_and_write(socket: &UdpSocket, tap_device: &Device, pong_sender: &mpsc::Sender<()>) {
     match receive_until_success(&socket).message {
-        Message::Data { payload, .. } => {
+        Message::Data { ethernet_frame } => {
             // println!("received data packet");
             // if !destination_mac_address.is_multicast() {
             //     println!(
@@ -108,17 +108,17 @@ fn recieve_and_write(socket: &UdpSocket, tap_device: &Device, pong_sender: &mpsc
             //     );
             // }
             // let time = SystemTime::now();
-            let len = tap_device.write_non_mut(&payload).unwrap();
-            if len < payload.len() {
+            let len = tap_device.write_non_mut(&ethernet_frame).unwrap();
+            if len < ethernet_frame.len() {
                 println!(
                     "{} bytes recieved but only {} bytes written to TAP",
                     len,
-                    payload.len()
+                    ethernet_frame.len()
                 );
             }
             // println!(
             //     "wrote {} bytes to TAP device in {:?}",
-            //     payload.len(),
+            //     ethernet_frame.len(),
             //     time.elapsed().unwrap()
             // );
         }
@@ -139,7 +139,7 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
             Ok(bytes_read) => {
                 let ethernet_frame = &buffer[..bytes_read];
                 match get_mac_addresses(ethernet_frame) {
-                    Ok((source_mac_address, destination_mac_address)) => {
+                    Ok((source_mac_address, _)) => {
                         if source_mac_address != mac_address {
                             println!("not device source mac? {}", &source_mac_address);
                             continue;
@@ -151,9 +151,7 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
                         send(
                             &socket,
                             &Message::Data {
-                                source_mac_address,
-                                destination_mac_address,
-                                payload: ethernet_frame.to_vec(),
+                                ethernet_frame: ethernet_frame.to_vec(),
                             },
                         );
                     }
