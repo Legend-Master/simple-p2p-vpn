@@ -30,10 +30,10 @@ fn setup_tap() -> Device {
 
 fn setup_socket(server: &SocketAddrV4) -> UdpSocket {
     // let bind_address = match server {
-    //     SocketAddr::V4(_) => "0.0.0.0:0",
-    //     SocketAddr::V6(_) => "[::]:0",
+    //     SocketAddr::V4(_) => SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0),
+    //     SocketAddr::V6(_) => SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0),
     // };
-    let bind_address = "0.0.0.0:0";
+    let bind_address = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
     let socket = UdpSocket::bind(bind_address).expect("couldn't bind to address");
     socket.connect(server).expect("couldn't connect to address");
     return socket;

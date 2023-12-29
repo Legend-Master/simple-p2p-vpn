@@ -30,7 +30,7 @@ struct Cli {
 fn main() {
     let config: Cli = argh::from_env();
 
-    let socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), config.port))
+    let socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, config.port))
         .expect("couldn't bind to address");
     println!("Server listening at 0.0.0.0:{}", config.port);
 
