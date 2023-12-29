@@ -1,5 +1,6 @@
 use clap::Parser;
-use shared::{receive_until_success, send, MacAddress, Message, ReceiveMessage};
+use macaddr::MacAddr6;
+use shared::{receive_until_success, send, Message, ReceiveMessage};
 use std::io;
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver};
@@ -85,7 +86,7 @@ fn main() {
 
     thread::scope(|scope| {
         scope.spawn(|| {
-            let mac_address = tap_device.get_mac().unwrap();
+            let mac_address = MacAddr6::from(tap_device.get_mac().unwrap());
             let mtu = tap_device.get_mtu().unwrap_or(1500);
             let mut buffer = vec![0; mtu as usize];
             loop {
@@ -97,15 +98,17 @@ fn main() {
                             continue;
                         }
                         // Ethernet header
-                        let destination_mac_address: MacAddress = buffer[0..=5].try_into().unwrap();
-                        let source_mac_address: MacAddress = buffer[6..=11].try_into().unwrap();
+                        let destination_mac_address: [u8; 6] = buffer[0..=5].try_into().unwrap();
+                        let source_mac_address: [u8; 6] = buffer[6..=11].try_into().unwrap();
+                        let destination_mac_address: MacAddr6 = destination_mac_address.into();
+                        let source_mac_address: MacAddr6 = source_mac_address.into();
                         if source_mac_address != mac_address {
                             println!("not device source mac? {:x?}", &source_mac_address);
                             continue;
                         };
 
                         // println!(
-                        //     "TAP packet ({} bytes) received (source: {:x?}, dest: {:x?})",
+                        //     "TAP packet ({} bytes) received (source: {}, dest: {})",
                         //     bytes_read, &source_mac_address, &destination_mac_address
                         // );
                         send(
@@ -139,9 +142,9 @@ fn main() {
                         source_mac_address: _,
                     } => {
                         // println!("received data packet");
-                        // if !is_multicast(&destination_mac_address) {
+                        // if !destination_mac_address.is_multicast() {
                         //     println!(
-                        //         "source: {:x?}, dest: {:x?}",
+                        //         "source: {}, dest: {}",
                         //         &source_mac_address, &destination_mac_address
                         //     );
                         // }
@@ -180,7 +183,7 @@ fn register(socket: &UdpSocket, tap_device: &Device) -> Result<(), Option<String
     send(
         socket,
         &Message::Register {
-            mac_address: tap_device.get_mac().unwrap(),
+            mac_address: tap_device.get_mac().unwrap().try_into().unwrap(),
         },
     );
     let ReceiveMessage {

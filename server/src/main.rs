@@ -1,5 +1,6 @@
 use clap::Parser;
-use shared::{is_multicast, receive_until_success, send_to, MacAddress, Message, ReceiveMessage};
+use macaddr::MacAddr6;
+use shared::{receive_until_success, send_to, Message, ReceiveMessage};
 use std::{
     collections::{HashMap, HashSet},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
@@ -13,7 +14,7 @@ const SUBNET_MASK: Ipv4Addr = Ipv4Addr::new(255, 255, 255, 0);
 
 struct Connection {
     ip: Ipv4Addr,
-    mac_address: MacAddress,
+    mac_address: MacAddr6,
     socket_address: SocketAddr,
     last_seen: SystemTime,
 }
@@ -46,7 +47,7 @@ fn main() {
         ip_pool.insert(octets.into());
     }
     let ip_pool: Mutex<HashSet<Ipv4Addr>> = Mutex::new(ip_pool);
-    let connections: Mutex<HashMap<MacAddress, Connection>> = Mutex::new(HashMap::new());
+    let connections: Mutex<HashMap<MacAddr6, Connection>> = Mutex::new(HashMap::new());
 
     thread::scope(|scope| {
         scope.spawn(|| loop {
@@ -83,8 +84,8 @@ fn get_ip(ip_pool: &Mutex<HashSet<Ipv4Addr>>) -> Option<Ipv4Addr> {
 
 // Reassign ip if it's a reconnection
 fn reassign_ip(
-    connections: &Mutex<HashMap<MacAddress, Connection>>,
-    mac_address: MacAddress,
+    connections: &Mutex<HashMap<MacAddr6, Connection>>,
+    mac_address: MacAddr6,
     source_address: SocketAddr,
     socket: &UdpSocket,
 ) -> bool {
@@ -109,9 +110,9 @@ fn reassign_ip(
 }
 
 fn register(
-    mac_address: MacAddress,
+    mac_address: MacAddr6,
     source_address: SocketAddr,
-    connections: &Mutex<HashMap<MacAddress, Connection>>,
+    connections: &Mutex<HashMap<MacAddr6, Connection>>,
     socket: &UdpSocket,
     ip_pool: &Mutex<HashSet<Ipv4Addr>>,
 ) {
@@ -158,7 +159,7 @@ fn register(
 fn handle_message(
     message: Message,
     source_address: SocketAddr,
-    connections: &Mutex<HashMap<[u8; 6], Connection>>,
+    connections: &Mutex<HashMap<MacAddr6, Connection>>,
     socket: &UdpSocket,
     ip_pool: &Mutex<HashSet<Ipv4Addr>>,
 ) {
@@ -186,7 +187,8 @@ fn handle_message(
                     &connection.socket_address,
                 );
             };
-            if is_multicast(&destination_mac_address) {
+            // Broadcast is a special type of multicast
+            if destination_mac_address.is_multicast() {
                 for (_, connection) in connections.lock().unwrap().iter() {
                     if connection.mac_address != source_mac_address {
                         send(connection);

@@ -1,24 +1,11 @@
+use macaddr::MacAddr6;
 use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
-
-pub type MacAddress = [u8; 6];
-const BROADCAST_MAC_ADDRESS: MacAddress = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
-
-pub fn is_broadcast(mac_adrress: &MacAddress) -> bool {
-    *mac_adrress == BROADCAST_MAC_ADDRESS
-}
-
-// Broadcast is a special type of multicast
-pub fn is_multicast(mac_adrress: &MacAddress) -> bool {
-    // [xxxxxxx1][xxxxxxxx][xxxxxxxx][xxxxxxxx][xxxxxxxx][xxxxxxxx]
-    //         ↑
-    mac_adrress[0] & 1 == 1
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Message {
     Register {
-        mac_address: MacAddress,
+        mac_address: MacAddr6,
     },
     RegisterSuccess {
         ip: Ipv4Addr,
@@ -30,8 +17,8 @@ pub enum Message {
     Ping,
     Pong,
     Data {
-        source_mac_address: MacAddress,
-        destination_mac_address: MacAddress,
+        source_mac_address: MacAddr6,
+        destination_mac_address: MacAddr6,
         payload: Vec<u8>,
     },
 }
