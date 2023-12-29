@@ -23,6 +23,16 @@ pub enum Message {
     },
 }
 
+pub fn get_mac_addresses(ethernet_frame: &[u8]) -> Result<(MacAddr6, MacAddr6), ()> {
+    if ethernet_frame.len() < 12 {
+        return Err(());
+    }
+    // Ethernet header
+    let destination_mac_address: [u8; 6] = ethernet_frame[0..=5].try_into().unwrap();
+    let source_mac_address: [u8; 6] = ethernet_frame[6..=11].try_into().unwrap();
+    Ok((source_mac_address.into(), destination_mac_address.into()))
+}
+
 pub fn send(socket: &UdpSocket, message: &Message) {
     let payload = &bincode::serialize(message).unwrap();
     let mut bytes_written = 0;

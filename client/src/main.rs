@@ -1,6 +1,6 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
-use shared::{receive_until_success, send, Message};
+use shared::{get_mac_addresses, receive_until_success, send, Message};
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::sleep;
@@ -84,28 +84,66 @@ fn main() {
     let (pong_sender, pong_receiver) = mpsc::channel();
 
     thread::scope(|scope| {
-        scope.spawn(|| {
-            let mac_address = MacAddr6::from(tap_device.get_mac().unwrap());
-            let mtu = tap_device.get_mtu().unwrap_or(1500);
-            let mut buffer = vec![0; mtu as usize];
-            loop {
-                match tap_device.read_non_mut(&mut buffer) {
-                    Ok(bytes_read) => {
-                        // Invalid packet
-                        if bytes_read < 12 {
-                            println!("only {} bytes read from TAP, ignoring", &bytes_read);
-                            continue;
-                        }
-                        // Ethernet header
-                        let destination_mac_address: [u8; 6] = buffer[0..=5].try_into().unwrap();
-                        let source_mac_address: [u8; 6] = buffer[6..=11].try_into().unwrap();
-                        let destination_mac_address: MacAddr6 = destination_mac_address.into();
-                        let source_mac_address: MacAddr6 = source_mac_address.into();
+        scope.spawn(|| read_and_send(tap_device, socket));
+
+        scope.spawn(move || loop {
+            recieve_and_write(socket, tap_device, &pong_sender);
+        });
+
+        scope.spawn(move || loop {
+            sleep(Duration::from_secs(5));
+            ping(&socket, &tap_device, &pong_receiver);
+        });
+    });
+}
+
+fn recieve_and_write(socket: &UdpSocket, tap_device: &Device, pong_sender: &mpsc::Sender<()>) {
+    match receive_until_success(&socket).message {
+        Message::Data { payload, .. } => {
+            // println!("received data packet");
+            // if !destination_mac_address.is_multicast() {
+            //     println!(
+            //         "source: {}, dest: {}",
+            //         &source_mac_address, &destination_mac_address
+            //     );
+            // }
+            // let time = SystemTime::now();
+            let len = tap_device.write_non_mut(&payload).unwrap();
+            if len < payload.len() {
+                println!(
+                    "{} bytes recieved but only {} bytes written to TAP",
+                    len,
+                    payload.len()
+                );
+            }
+            // println!(
+            //     "wrote {} bytes to TAP device in {:?}",
+            //     payload.len(),
+            //     time.elapsed().unwrap()
+            // );
+        }
+        Message::Pong => {
+            pong_sender.send(()).unwrap();
+        }
+        // Ignore invalid pakcets
+        _ => {}
+    }
+}
+
+fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
+    let mac_address = MacAddr6::from(tap_device.get_mac().unwrap());
+    let mtu = tap_device.get_mtu().unwrap_or(1500);
+    let mut buffer = vec![0; mtu as usize];
+    loop {
+        match tap_device.read_non_mut(&mut buffer) {
+            Ok(bytes_read) => {
+                let ethernet_frame = &buffer[..bytes_read];
+                match get_mac_addresses(ethernet_frame) {
+                    Ok((source_mac_address, destination_mac_address)) => {
                         if source_mac_address != mac_address {
-                            println!("not device source mac? {:x?}", &source_mac_address);
+                            println!("not device source mac? {}", &source_mac_address);
                             continue;
                         };
-
                         // println!(
                         //     "TAP packet ({} bytes) received (source: {}, dest: {})",
                         //     bytes_read, &source_mac_address, &destination_mac_address
@@ -115,58 +153,23 @@ fn main() {
                             &Message::Data {
                                 source_mac_address,
                                 destination_mac_address,
-                                payload: (&buffer[..bytes_read]).to_vec(),
+                                payload: ethernet_frame.to_vec(),
                             },
                         );
                     }
-                    Err(error) => {
-                        println!("Can't read from TAP: {}", error);
+                    Err(_) => {
+                        // Invalid packet
+                        println!("only {} bytes read from TAP, ignoring", &bytes_read);
                         continue;
                     }
                 }
             }
-        });
-
-        scope.spawn(move || {
-            loop {
-                match receive_until_success(&socket).message {
-                    Message::Data { payload, .. } => {
-                        // println!("received data packet");
-                        // if !destination_mac_address.is_multicast() {
-                        //     println!(
-                        //         "source: {}, dest: {}",
-                        //         &source_mac_address, &destination_mac_address
-                        //     );
-                        // }
-                        // let time = SystemTime::now();
-                        let len = tap_device.write_non_mut(&payload).unwrap();
-                        if len < payload.len() {
-                            println!(
-                                "{} bytes recieved but only {} bytes written to TAP",
-                                len,
-                                payload.len()
-                            );
-                        }
-                        // println!(
-                        //     "wrote {} bytes to TAP device in {:?}",
-                        //     payload.len(),
-                        //     time.elapsed().unwrap()
-                        // );
-                    }
-                    Message::Pong => {
-                        pong_sender.send(()).unwrap();
-                    }
-                    // Ignore invalid pakcets
-                    _ => {}
-                }
+            Err(error) => {
+                println!("Can't read from TAP: {}", error);
+                continue;
             }
-        });
-
-        scope.spawn(move || loop {
-            sleep(Duration::from_secs(5));
-            ping(&socket, &tap_device, &pong_receiver);
-        });
-    });
+        }
+    }
 }
 
 fn register(socket: &UdpSocket, tap_device: &Device) -> Result<(), Option<String>> {
