@@ -35,3 +35,4 @@ You'll need to install [TAP Windows driver](https://build.openvpn.net/downloads/
 - [ ] Encryption
 - [ ] Handle errors instead of `unwrap` all over the place
 - [ ] Doing IO asynchronously
+- [ ] IPv6 support
