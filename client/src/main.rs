@@ -1,7 +1,6 @@
-use clap::Parser;
+use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{receive_until_success, send, Message, ReceiveMessage};
-use std::io;
 use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::sleep;
@@ -40,38 +39,46 @@ fn setup_socket(server: &SocketAddrV4) -> UdpSocket {
     return socket;
 }
 
-// https://stackoverflow.com/a/77047863/16993372
-fn resolve_host(hostname_port: &str) -> io::Result<SocketAddrV4> {
-    for socketaddr in hostname_port.to_socket_addrs()? {
-        match socketaddr {
-            SocketAddr::V4(address) => {
-                return Ok(address);
+fn resolve_host(hostname_port: &str) -> Result<SocketAddrV4, String> {
+    match hostname_port.to_socket_addrs() {
+        Ok(socket_addresses) => {
+            let mut has_ipv6_address = false;
+            for address in socket_addresses {
+                match address {
+                    SocketAddr::V4(address) => {
+                        return Ok(address);
+                    }
+                    SocketAddr::V6(_) => has_ipv6_address = true,
+                }
             }
-            SocketAddr::V6(_) => {}
+            if has_ipv6_address {
+                Err("No IPv6 support yet".to_owned())
+            } else {
+                Err(format!("Could not find destination {hostname_port}"))
+            }
         }
+        Err(error) => Err(error.to_string()),
     }
-    Err(io::Error::new(
-        io::ErrorKind::AddrNotAvailable,
-        format!("Could not find destination {hostname_port}"),
-    ))
 }
 
 /// A simple peer to peer VPN client
-#[derive(Parser, Debug)]
+#[derive(FromArgs)]
 struct Cli {
-    #[arg(
-        // short,
-        // long,
-        // env,
-        value_name = "server",
-        help = "Server ip adrress like localhost:8000",
-        value_parser = resolve_host,
-    )]
+    // #[arg(
+    //     // short,
+    //     // long,
+    //     // env,
+    //     value_name = "server",
+    //     help = "Server ip adrress like localhost:8000",
+    //     value_parser = resolve_host,
+    // )]
+    /// server ip adrress like localhost:8000
+    #[argh(positional, from_str_fn(resolve_host))]
     server: SocketAddrV4,
 }
 
 fn main() {
-    let config = Cli::parse();
+    let config: Cli = argh::from_env();
 
     println!("Starting up TAP device");
     let tap_device = &setup_tap();

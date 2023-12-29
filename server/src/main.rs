@@ -1,4 +1,4 @@
-use clap::Parser;
+use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{receive_until_success, send_to, Message, ReceiveMessage};
 use std::{
@@ -20,21 +20,15 @@ struct Connection {
 }
 
 /// A simple peer to peer VPN client
-#[derive(Parser, Debug)]
+#[derive(FromArgs)]
 struct Cli {
-    /// Server ip adrress like localhost:8000
-    #[arg(
-        // short,
-        // long,
-        // env,
-        value_name = "port",
-        help = "Listening port",
-    )]
+    /// listening port
+    #[argh(positional)]
     port: u16,
 }
 
 fn main() {
-    let config = Cli::parse();
+    let config: Cli = argh::from_env();
 
     let socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), config.port))
         .expect("couldn't bind to address");
