@@ -60,24 +60,31 @@ pub struct ReceiveMessage {
     pub source_address: SocketAddr,
 }
 
-pub fn receive(socket: &UdpSocket) -> Result<ReceiveMessage, std::io::Error> {
-    let mut buffer = [0; 10000];
-    socket
-        .recv_from(&mut buffer)
-        .map(|(bytes_read, source_address)| ReceiveMessage {
-            message: bincode::deserialize(&buffer[..bytes_read]).unwrap(),
-            source_address,
-        })
-}
+// pub fn receive(socket: &UdpSocket) -> Result<ReceiveMessage, std::io::Error> {
+//     let mut buffer = [0; 10000];
+//     socket
+//         .recv_from(&mut buffer)
+//         .map(|(bytes_read, source_address)| ReceiveMessage {
+//             message: bincode::deserialize(&buffer[..bytes_read]).unwrap(),
+//             source_address,
+//         })
+// }
 
 pub fn receive_until_success(socket: &UdpSocket) -> ReceiveMessage {
     let mut buffer = [0; 10000];
     loop {
         if let Ok((bytes_read, source_address)) = socket.recv_from(&mut buffer) {
-            return ReceiveMessage {
-                message: bincode::deserialize(&buffer[..bytes_read]).unwrap(),
-                source_address,
-            };
+            match bincode::deserialize(&buffer[..bytes_read]) {
+                Ok(message) => {
+                    return ReceiveMessage {
+                        message,
+                        source_address,
+                    }
+                }
+                Err(error) => {
+                    println!("Can't decode packet with bincode, error: {}", error);
+                }
+            }
         }
         // else {
         //     println!("recv_from error");
