@@ -211,7 +211,7 @@ fn ping(socket: &UdpSocket, tap_device: &Device, pong_receiver: &Receiver<()>) {
         clear_receiver(&pong_receiver);
         if let Ok(_) = pong_receiver.recv_timeout(Duration::from_secs(5)) {
             // Pong received
-            println!("Pong received");
+            // println!("Pong received");
             return;
         }
     }

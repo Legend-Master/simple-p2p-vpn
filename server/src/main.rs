@@ -116,10 +116,7 @@ fn register(
     socket: &UdpSocket,
     ip_pool: &Mutex<HashSet<Ipv4Addr>>,
 ) {
-    println!(
-        "Incomming client {:x?} from {}",
-        &mac_address, &source_address
-    );
+    println!("Incomming client {} from {}", &mac_address, &source_address);
 
     if reassign_ip(connections, mac_address, source_address, socket) {
         return;
