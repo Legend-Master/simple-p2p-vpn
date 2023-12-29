@@ -1,7 +1,7 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{get_mac_addresses, receive_until_success, send, Message};
-use std::net::{SocketAddr, SocketAddrV4, ToSocketAddrs};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
@@ -23,8 +23,8 @@ fn setup_tap() -> Device {
             Ok(dev)
         })
         // Everything failed, just panic
-        .expect("Failed to open device");
-    tap_device.up().expect("Failed to turn on device");
+        .expect("Failed to open TAP");
+    tap_device.up().expect("Failed to turn on TAP");
     return tap_device;
 }
 
@@ -52,7 +52,7 @@ fn resolve_host(hostname_port: &str) -> Result<SocketAddrV4, String> {
                 }
             }
             if has_ipv6_address {
-                Err("No IPv6 support yet".to_owned())
+                Err("IPv6 is not support yet".to_owned())
             } else {
                 Err(format!("Could not find destination {hostname_port}"))
             }
@@ -79,26 +79,45 @@ fn main() {
     println!("Connecting to server {}", config.server);
     let socket = &setup_socket(&config.server);
 
-    register(&socket, &tap_device).unwrap();
-
+    let (register_sender, register_receiver) = mpsc::channel();
     let (pong_sender, pong_receiver) = mpsc::channel();
 
     thread::scope(|scope| {
+        scope.spawn(move || loop {
+            handle_message(socket, tap_device, &register_sender, &pong_sender);
+        });
+
+        if let Err(error) = register(socket, tap_device, &register_receiver) {
+            panic!(
+                "Re-register failed: {}",
+                match error {
+                    Some(reason) => reason,
+                    None => "unkown reason".to_string(),
+                }
+            );
+        }
+
         scope.spawn(|| read_and_send(tap_device, socket));
 
         scope.spawn(move || loop {
-            recieve_and_write(socket, tap_device, &pong_sender);
-        });
-
-        scope.spawn(move || loop {
             sleep(Duration::from_secs(5));
-            ping(&socket, &tap_device, &pong_receiver);
+            ping(socket, tap_device, &register_receiver, &pong_receiver);
         });
     });
 }
 
-fn recieve_and_write(socket: &UdpSocket, tap_device: &Device, pong_sender: &Sender<()>) {
-    match receive_until_success(&socket).message {
+enum RegisterResult {
+    Success { ip: Ipv4Addr, subnet_mask: Ipv4Addr },
+    Fail { reason: String },
+}
+
+fn handle_message(
+    socket: &UdpSocket,
+    tap_device: &Device,
+    register_sender: &Sender<RegisterResult>,
+    pong_sender: &Sender<()>,
+) {
+    match receive_until_success(socket).message {
         Message::Data { ethernet_frame } => {
             // println!("received data packet");
             // let time = SystemTime::now();
@@ -121,6 +140,16 @@ fn recieve_and_write(socket: &UdpSocket, tap_device: &Device, pong_sender: &Send
             //     ethernet_frame.len(),
             //     time.elapsed().unwrap()
             // );
+        }
+        Message::RegisterSuccess { ip, subnet_mask } => {
+            register_sender
+                .send(RegisterResult::Success { ip, subnet_mask })
+                .unwrap();
+        }
+        Message::RegisterFail { reason } => {
+            register_sender
+                .send(RegisterResult::Fail { reason })
+                .unwrap();
         }
         Message::Pong => {
             pong_sender.send(()).unwrap();
@@ -149,7 +178,7 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
                         //     bytes_read, &source_mac_address, &destination_mac_address
                         // );
                         send(
-                            &socket,
+                            socket,
                             &Message::Data {
                                 ethernet_frame: ethernet_frame.to_vec(),
                             },
@@ -170,32 +199,44 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
     }
 }
 
-fn register(socket: &UdpSocket, tap_device: &Device) -> Result<(), Option<String>> {
-    send(
-        socket,
-        &Message::Register {
-            mac_address: tap_device.get_mac().unwrap().try_into().unwrap(),
-        },
-    );
-    match receive_until_success(socket).message {
-        Message::RegisterSuccess { ip, subnet_mask } => {
-            // Set the device ip
-            tap_device
-                .set_ip(ip, subnet_mask)
-                .expect("Failed to set device ip");
-            println!("Connected, assign ip {}", ip);
-            Ok(())
-        }
-        Message::RegisterFail { reason } => Err(Some(reason)),
-        _ => Err(None),
+fn register(
+    socket: &UdpSocket,
+    tap_device: &Device,
+    register_receiver: &Receiver<RegisterResult>,
+) -> Result<(), Option<String>> {
+    let mac_address = MacAddr6::from(tap_device.get_mac().unwrap());
+    // Retry register for 15 seconds
+    while SystemTime::now().elapsed().unwrap() < Duration::from_secs(15) {
+        send(socket, &Message::Register { mac_address });
+        match register_receiver.recv_timeout(Duration::from_secs(5)) {
+            Ok(result) => match result {
+                RegisterResult::Success { ip, subnet_mask } => {
+                    tap_device
+                        .set_ip(ip, subnet_mask)
+                        .expect("Failed to set device ip");
+                    println!("Connected, assign ip {}", ip);
+                    return Ok(());
+                }
+                RegisterResult::Fail { reason } => {
+                    return Err(Some(reason));
+                }
+            },
+            Err(_) => continue,
+        };
     }
+    return Err(Some("Timeout".to_owned()));
 }
 
-fn ping(socket: &UdpSocket, tap_device: &Device, pong_receiver: &Receiver<()>) {
+fn ping(
+    socket: &UdpSocket,
+    tap_device: &Device,
+    register_receiver: &Receiver<RegisterResult>,
+    pong_receiver: &Receiver<()>,
+) {
     // Retry ping for 15 seconds
     while SystemTime::now().elapsed().unwrap() < Duration::from_secs(15) {
         send(socket, &Message::Ping);
-        clear_receiver(&pong_receiver);
+        clear_receiver(pong_receiver);
         if let Ok(_) = pong_receiver.recv_timeout(Duration::from_secs(5)) {
             // Pong received
             // println!("Pong received");
@@ -205,7 +246,7 @@ fn ping(socket: &UdpSocket, tap_device: &Device, pong_receiver: &Receiver<()>) {
     // If didn't get a pong then we probably lost connection to server
     // try re-register
     println!("Lost connection to server, trying to re-register");
-    if let Err(error) = register(&socket, &tap_device) {
+    if let Err(error) = register(socket, tap_device, register_receiver) {
         // println!(
         panic!(
             "Re-register failed: {}",
