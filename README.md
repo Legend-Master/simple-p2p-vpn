@@ -28,6 +28,16 @@ Some notes:
 
 You'll need to install [TAP Windows driver](https://build.openvpn.net/downloads/releases/latest.bak/tap-windows-latest-stable.exe) from OpenVPN first
 
+#### Tips
+
+You can reconnect to your server more easily using a batch file and a [short cut file to run as admin by default](https://superuser.com/a/788929)
+
+```batch
+cd /D "%~dp0"
+client.exe example.com:1234
+pause
+```
+
 ## TODO
 
 - [ ] Arm CPU support
