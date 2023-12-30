@@ -30,12 +30,18 @@ You'll need to install [TAP Windows driver](https://build.openvpn.net/downloads/
 
 #### Tips
 
-You can reconnect to your server more easily using a batch file and a [short cut file to run as admin by default](https://superuser.com/a/788929)
+You can reconnect to your server more easily using a batch file
 
 ```batch
 cd /D "%~dp0"
 client.exe example.com:1234
 pause
+```
+
+And you can add [this line](https://stackoverflow.com/a/51472107/16993372) at the beginning to the batch file or use a [short cut file](https://superuser.com/a/788929) to run as admin by default
+
+```batch
+if not "%1"=="am_admin" (powershell start -verb runas '%0' am_admin & exit /b)
 ```
 
 ## TODO
