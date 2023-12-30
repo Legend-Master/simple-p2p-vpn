@@ -1,9 +1,10 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{get_mac_addresses, receive_until_success, send_to, Message, ReceiveMessage};
+use socket2::{Domain, Socket, Type};
 use std::{
     collections::{HashMap, HashSet},
-    net::{Ipv4Addr, SocketAddr, UdpSocket},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket},
     sync::Mutex,
     thread::{self, sleep},
     time::{Duration, SystemTime},
@@ -35,19 +36,21 @@ fn main() {
 
     thread::scope(|scope| {
         scope.spawn(|| {
-            let socket_ipv4 = UdpSocket::bind(format!("0.0.0.0:{}", config.port))
-                .expect("couldn't bind to IPv4 address");
-            println!("Server listening at 0.0.0.0:{}", config.port);
-            loop {
-                handle_message(&socket_ipv4, &connections, &ip_pool);
-            }
-        });
-        scope.spawn(|| {
-            let socket_ipv6 = UdpSocket::bind(format!("[::]:{}", config.port))
-                .expect("couldn't bind to IPv6 address");
+            let socket = Socket::new(Domain::IPV6, Type::DGRAM, None).expect("Can't create socket");
+            socket
+                .set_only_v6(false)
+                .expect("Can't set socket to receive packets from an IPv4-mapped IPv6 address");
+
+            let address = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), config.port);
+            socket
+                .bind(&address.into())
+                .expect(&format!("Can't bind to address {}", address));
+            let socket: UdpSocket = socket.into();
+
             println!("Server listening at [::]:{}", config.port);
+
             loop {
-                handle_message(&socket_ipv6, &connections, &ip_pool);
+                handle_message(&socket, &connections, &ip_pool);
             }
         });
 
