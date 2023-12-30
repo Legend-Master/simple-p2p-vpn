@@ -12,6 +12,31 @@
 				"isDefault": true
 			},
 			"label": "rust: cargo build"
-		}
+		},
+		{
+			"type": "cargo",
+			"command": "build",
+			"args": [
+				"--release"
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "rust: cargo build release"
+		},
+		{
+			"type": "shell",
+			"options": {
+				"shell": {
+					"executable": "wsl",
+					"args": [
+						"-e"
+					]
+				}
+			},
+			"command": "scripts/buid-server.sh",
+			"problemMatcher": "$rustc",
+			"label": "wsl build server release"
+		},
 	]
 }
