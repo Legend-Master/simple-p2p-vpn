@@ -3,7 +3,7 @@ use macaddr::MacAddr6;
 use shared::{get_mac_addresses, receive_until_success, send_to, Message, ReceiveMessage};
 use std::{
     collections::{HashMap, HashSet},
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
+    net::{Ipv4Addr, SocketAddr, UdpSocket},
     sync::Mutex,
     thread::{self, sleep},
     time::{Duration, SystemTime},
@@ -30,16 +30,25 @@ struct Cli {
 fn main() {
     let config: Cli = argh::from_env();
 
-    let socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, config.port))
-        .expect("couldn't bind to address");
-    println!("Server listening at 0.0.0.0:{}", config.port);
-
     let ip_pool: Mutex<HashSet<Ipv4Addr>> = Mutex::new(generate_ip_pool());
     let connections: Mutex<HashMap<MacAddr6, Connection>> = Mutex::new(HashMap::new());
 
     thread::scope(|scope| {
-        scope.spawn(|| loop {
-            handle_message(&socket, &connections, &ip_pool);
+        scope.spawn(|| {
+            let socket_ipv4 = UdpSocket::bind(format!("0.0.0.0:{}", config.port))
+                .expect("couldn't bind to IPv4 address");
+            println!("Server listening at 0.0.0.0:{}", config.port);
+            loop {
+                handle_message(&socket_ipv4, &connections, &ip_pool);
+            }
+        });
+        scope.spawn(|| {
+            let socket_ipv6 = UdpSocket::bind(format!("[::]:{}", config.port))
+                .expect("couldn't bind to IPv6 address");
+            println!("Server listening at [::]:{}", config.port);
+            loop {
+                handle_message(&socket_ipv6, &connections, &ip_pool);
+            }
         });
 
         // Purge timed out connections

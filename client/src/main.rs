@@ -1,7 +1,7 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{get_mac_addresses, receive_until_success, send, Message};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
+use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
@@ -28,35 +28,19 @@ fn setup_tap() -> Device {
     return tap_device;
 }
 
-fn setup_socket(server: &SocketAddrV4) -> UdpSocket {
-    // let bind_address = match server {
-    //     SocketAddr::V4(_) => SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0),
-    //     SocketAddr::V6(_) => SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0),
-    // };
-    let bind_address = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
+fn setup_socket(server: &SocketAddr) -> UdpSocket {
+    let bind_address = match server {
+        SocketAddr::V4(_) => "0.0.0.0:0",
+        SocketAddr::V6(_) => "[::]:0",
+    };
     let socket = UdpSocket::bind(bind_address).expect("couldn't bind to address");
     socket.connect(server).expect("couldn't connect to address");
     return socket;
 }
 
-fn resolve_host(hostname_port: &str) -> Result<SocketAddrV4, String> {
+fn resolve_host(hostname_port: &str) -> Result<SocketAddr, String> {
     match hostname_port.to_socket_addrs() {
-        Ok(socket_addresses) => {
-            let mut has_ipv6_address = false;
-            for address in socket_addresses {
-                match address {
-                    SocketAddr::V4(address) => {
-                        return Ok(address);
-                    }
-                    SocketAddr::V6(_) => has_ipv6_address = true,
-                }
-            }
-            if has_ipv6_address {
-                Err("IPv6 is not support yet".to_owned())
-            } else {
-                Err(format!("Could not find destination {hostname_port}"))
-            }
-        }
+        Ok(mut socket_addresses) => Ok(socket_addresses.next().unwrap()),
         Err(error) => Err(error.to_string()),
     }
 }
@@ -66,7 +50,7 @@ fn resolve_host(hostname_port: &str) -> Result<SocketAddrV4, String> {
 struct Cli {
     /// server ip adrress like localhost:8000
     #[argh(positional, from_str_fn(resolve_host))]
-    server: SocketAddrV4,
+    server: SocketAddr,
 }
 
 fn main() {
@@ -202,21 +186,22 @@ fn register(
     // Retry register for 15 seconds
     while SystemTime::now().elapsed().unwrap() < Duration::from_secs(15) {
         send(socket, &Message::Register { mac_address });
-        match register_receiver.recv_timeout(Duration::from_secs(5)) {
-            Ok(result) => match result {
+        clear_receiver(register_receiver);
+        if let Ok(result) = register_receiver.recv_timeout(Duration::from_secs(5)) {
+            match result {
                 RegisterResult::Success { ip, subnet_mask } => {
+                    println!("Connected, server gave us {}, setting it to TAP", ip);
                     tap_device
                         .set_ip(ip, subnet_mask)
-                        .expect("Failed to set device ip");
-                    println!("Connected, assign ip {}", ip);
+                        .expect("Failed to set TAP IP");
+                    println!("Set TAP IP to {} successfully", ip);
                     return Ok(());
                 }
                 RegisterResult::Fail { reason } => {
                     return Err(reason);
                 }
-            },
-            Err(_) => continue,
-        };
+            }
+        }
     }
     return Err("Timeout".to_owned());
 }

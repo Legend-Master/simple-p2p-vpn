@@ -45,4 +45,4 @@ pause
 - [ ] Encryption
 - [ ] Handle errors instead of `unwrap` all over the place
 - [ ] Doing IO asynchronously
-- [ ] IPv6 support
+- [x] IPv6 support
