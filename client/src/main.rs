@@ -4,7 +4,7 @@ use shared::{get_mac_addresses, receive_until_success, send, Message};
 use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 use std::{net::UdpSocket, thread};
 use tap_windows::{Device, HARDWARE_ID};
 
@@ -98,7 +98,7 @@ fn handle_message(
     match receive_until_success(socket).message {
         Message::Data { ethernet_frame } => {
             // println!("received data packet");
-            // let time = SystemTime::now();
+            // let time = Instant::now();
             match tap_device.write_non_mut(&ethernet_frame) {
                 Ok(bytes_written) => {
                     if bytes_written < ethernet_frame.len() {
@@ -116,7 +116,7 @@ fn handle_message(
             // println!(
             //     "wrote {} bytes to TAP device in {:?}",
             //     ethernet_frame.len(),
-            //     time.elapsed().unwrap()
+            //     time.elapsed()
             // );
         }
         Message::RegisterSuccess { ip, subnet_mask } => {
@@ -184,7 +184,7 @@ fn register(
 ) -> Result<(), String> {
     let mac_address = MacAddr6::from(tap_device.get_mac().unwrap());
     // Retry register for 15 seconds
-    while SystemTime::now().elapsed().unwrap() < Duration::from_secs(15) {
+    while Instant::now().elapsed() < Duration::from_secs(15) {
         send(socket, &Message::Register { mac_address });
         clear_receiver(register_receiver);
         if let Ok(result) = register_receiver.recv_timeout(Duration::from_secs(5)) {
@@ -213,7 +213,7 @@ fn ping(
     pong_receiver: &Receiver<()>,
 ) {
     // Retry ping for 15 seconds
-    while SystemTime::now().elapsed().unwrap() < Duration::from_secs(15) {
+    while Instant::now().elapsed() < Duration::from_secs(15) {
         send(socket, &Message::Ping);
         clear_receiver(pong_receiver);
         if let Ok(_) = pong_receiver.recv_timeout(Duration::from_secs(5)) {

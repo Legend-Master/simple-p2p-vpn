@@ -7,7 +7,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket},
     sync::Mutex,
     thread::{self, sleep},
-    time::{Duration, SystemTime},
+    time::{Duration, Instant},
 };
 
 const SUBNET: Ipv4Addr = Ipv4Addr::new(10, 123, 123, 0);
@@ -17,7 +17,7 @@ struct Connection {
     ip: Ipv4Addr,
     mac_address: MacAddr6,
     socket_address: SocketAddr,
-    last_seen: SystemTime,
+    last_seen: Instant,
 }
 
 /// A simple peer to peer VPN client
@@ -87,7 +87,7 @@ fn reassign_ip(
     match connections.get_mut(&mac_address) {
         Some(connection) => {
             connection.socket_address = source_address;
-            connection.last_seen = SystemTime::now();
+            connection.last_seen = Instant::now();
             send_to(
                 socket,
                 &Message::RegisterSuccess {
@@ -132,7 +132,7 @@ fn register(
                 ip,
                 mac_address,
                 socket_address: source_address,
-                last_seen: SystemTime::now(),
+                last_seen: Instant::now(),
             },
         );
         ip_pool.lock().unwrap().remove(&ip);
@@ -172,7 +172,7 @@ fn handle_message(
                 .iter_mut()
                 .find(|(_, connection)| connection.socket_address == source_address)
             {
-                connection.last_seen = SystemTime::now();
+                connection.last_seen = Instant::now();
                 send_to(socket, &Message::Pong, &connection.socket_address);
             }
         }
@@ -222,7 +222,7 @@ fn purge_timedout_connections(
     ip_pool: &Mutex<HashSet<Ipv4Addr>>,
 ) {
     connections.lock().unwrap().retain(|_, connection| {
-        let should_keep = connection.last_seen.elapsed().unwrap() < Duration::from_secs(200);
+        let should_keep = connection.last_seen.elapsed() < Duration::from_secs(200);
         if !should_keep {
             // Release ip from peer
             ip_pool.lock().unwrap().insert(connection.ip);
