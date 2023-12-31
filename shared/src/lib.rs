@@ -31,9 +31,8 @@ pub fn send(socket: &UdpSocket, message: &Message) {
     // let bytes_written = socket.send(payload).unwrap();
     // if bytes_written < payload.len() {
     //     println!(
-    //         "should send {} bytes but only {} bytes sent",
-    //         payload.len(),
-    //         &bytes_written
+    //         "should send {} bytes but only {bytes_written} bytes sent",
+    //         payload.len()
     //     );
     // }
 }
@@ -44,12 +43,11 @@ pub fn send_to(socket: &UdpSocket, message: &Message, to_address: &SocketAddr) {
     while bytes_written < payload.len() {
         bytes_written += socket.send_to(payload, to_address).unwrap();
     }
-    // let bytes_written = socket.send_to(payload, to_address).unwrap();
+    // let bytes_written = socket.send(payload).unwrap();
     // if bytes_written < payload.len() {
     //     println!(
-    //         "should send {} bytes but only {} bytes sent",
-    //         payload.len(),
-    //         &bytes_written
+    //         "should send {} bytes but only {bytes_written} bytes sent",
+    //         payload.len()
     //     );
     // }
 }
@@ -81,7 +79,7 @@ pub fn receive_until_success(socket: &UdpSocket) -> ReceiveMessage {
                     }
                 }
                 Err(error) => {
-                    println!("Can't decode packet with bincode, error: {}", error);
+                    println!("Can't decode packet with bincode, error: {error}");
                 }
             }
         }

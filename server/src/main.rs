@@ -44,7 +44,7 @@ fn main() {
             let address = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), config.port);
             socket
                 .bind(&address.into())
-                .expect(&format!("Can't bind to address {}", address));
+                .expect(&format!("Can't bind to address {address}"));
             let socket: UdpSocket = socket.into();
 
             println!("Server listening at [::]:{}", config.port);
@@ -96,7 +96,7 @@ fn reassign_ip(
                 },
                 &source_address,
             );
-            println!("Reassign IP {} to {}", &connection.ip, &source_address);
+            println!("Reassign IP {ip} to {source_address}", ip = connection.ip);
             true
         }
         None => false,
@@ -110,14 +110,14 @@ fn register(
     socket: &UdpSocket,
     ip_pool: &Mutex<HashSet<Ipv4Addr>>,
 ) {
-    println!("Incomming client {} from {}", &mac_address, &source_address);
+    println!("Incomming client {mac_address} from {source_address}");
 
     if reassign_ip(connections, mac_address, source_address, socket) {
         return;
     }
 
     if let Some(ip) = get_ip(ip_pool) {
-        println!("Assign IP {} to {}", &ip, &source_address);
+        println!("Assign IP {ip} to {source_address}");
         send_to(
             socket,
             &Message::RegisterSuccess {
@@ -165,7 +165,7 @@ fn handle_message(
             // dbg!(&ethernet_frame);
         }
         Message::Ping => {
-            // println!("ping from {}", &source_address);
+            // println!("ping from {source_address}");
             if let Some((_, connection)) = connections
                 .lock()
                 .unwrap()

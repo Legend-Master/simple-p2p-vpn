@@ -72,7 +72,7 @@ fn main() {
         });
 
         if let Err(reason) = register(socket, tap_device, &register_receiver) {
-            panic!("Re-register failed: {}", reason);
+            panic!("Re-register failed: {reason}");
         }
 
         scope.spawn(|| read_and_send(tap_device, socket));
@@ -103,14 +103,13 @@ fn handle_message(
                 Ok(bytes_written) => {
                     if bytes_written < ethernet_frame.len() {
                         println!(
-                            "{} bytes recieved but only {} bytes written to TAP",
-                            bytes_written,
+                            "{bytes_written} bytes recieved but only {} bytes written to TAP",
                             ethernet_frame.len()
                         );
                     }
                 }
                 Err(error) => {
-                    println!("Can't write to TAP with error: {}", error);
+                    println!("Can't write to TAP with error: {error}");
                 }
             }
             // println!(
@@ -148,12 +147,11 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
                 match get_mac_addresses(ethernet_frame) {
                     Ok((source_mac_address, _)) => {
                         if source_mac_address != mac_address {
-                            println!("not device source mac? {}", &source_mac_address);
+                            println!("not device source mac? {source_mac_address}");
                             continue;
                         };
                         // println!(
-                        //     "TAP packet ({} bytes) received (source: {}, dest: {})",
-                        //     bytes_read, &source_mac_address, &destination_mac_address
+                        //     "TAP packet ({bytes_read} bytes) received (source: {source_mac_address}, dest: {destination_mac_address})"
                         // );
                         send(
                             socket,
@@ -164,13 +162,13 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
                     }
                     Err(_) => {
                         // Invalid packet
-                        println!("only {} bytes read from TAP, ignoring", &bytes_read);
+                        println!("only {bytes_read} bytes read from TAP, ignoring");
                         continue;
                     }
                 }
             }
             Err(error) => {
-                println!("Can't read from TAP: {}", error);
+                println!("Can't read from TAP: {error}");
                 continue;
             }
         }
@@ -190,11 +188,11 @@ fn register(
         if let Ok(result) = register_receiver.recv_timeout(Duration::from_secs(5)) {
             match result {
                 RegisterResult::Success { ip, subnet_mask } => {
-                    println!("Connected, server gave us {}, setting it to TAP", ip);
+                    println!("Connected, server gave us {ip}, setting it to TAP");
                     tap_device
                         .set_ip(ip, subnet_mask)
                         .expect("Failed to set TAP IP");
-                    println!("Set TAP IP to {} successfully", ip);
+                    println!("Set TAP IP to {ip} successfully");
                     return Ok(());
                 }
                 RegisterResult::Fail { reason } => {
@@ -226,8 +224,8 @@ fn ping(
     // try re-register
     println!("Lost connection to server, trying to re-register");
     if let Err(reason) = register(socket, tap_device, register_receiver) {
-        // println!(
-        panic!("Re-register failed: {}", reason);
+        // println!("Re-register failed: {reason}");
+        panic!("Re-register failed: {reason}");
     }
     println!("Re-register success");
 }
