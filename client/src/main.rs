@@ -182,7 +182,8 @@ fn register(
 ) -> Result<(), String> {
     let mac_address = MacAddr6::from(tap_device.get_mac().unwrap());
     // Retry register for 15 seconds
-    while Instant::now().elapsed() < Duration::from_secs(15) {
+    let start_time = Instant::now();
+    while start_time.elapsed() < Duration::from_secs(15) {
         send(socket, &Message::Register { mac_address });
         clear_receiver(register_receiver);
         if let Ok(result) = register_receiver.recv_timeout(Duration::from_secs(5)) {
@@ -211,7 +212,8 @@ fn ping(
     pong_receiver: &Receiver<()>,
 ) {
     // Retry ping for 15 seconds
-    while Instant::now().elapsed() < Duration::from_secs(15) {
+    let start_time = Instant::now();
+    while start_time.elapsed() < Duration::from_secs(15) {
         send(socket, &Message::Ping);
         clear_receiver(pong_receiver);
         if let Ok(_) = pong_receiver.recv_timeout(Duration::from_secs(5)) {
