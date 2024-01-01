@@ -1,8 +1,8 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{
-    get_formatted_time, get_mac_addresses, log, receive_until_success, send_to, Message,
-    ReceiveMessage,
+    get_formatted_time, get_mac_addresses, log, receive_until_success, send_to,
+    setup_panic_logging_hook, Message, ReceiveMessage,
 };
 use socket2::{Domain, Socket, Type};
 use std::{
@@ -33,6 +33,8 @@ struct Cli {
 
 fn main() {
     let config: Cli = argh::from_env();
+
+    setup_panic_logging_hook();
 
     let ip_pool: Mutex<HashSet<Ipv4Addr>> = Mutex::new(generate_ip_pool());
     let connections: Mutex<HashMap<MacAddr6, Connection>> = Mutex::new(HashMap::new());

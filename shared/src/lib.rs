@@ -96,7 +96,7 @@ pub fn get_formatted_time() -> String {
     OffsetDateTime::now_local()
         .unwrap()
         .format(format_description!(
-            "[month]-[day] [hour]:[minute]:[second]"
+            "[year]-[month]-[day] [hour]:[minute]:[second]"
         ))
         .unwrap()
 }
@@ -107,4 +107,13 @@ macro_rules! log {
         let now = get_formatted_time();
         println!("[{now}] {}", format_args!($($arg)*));
     };
+}
+
+pub fn setup_panic_logging_hook() {
+    let default_panic = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let now = get_formatted_time();
+        println!("[{now}] Panic:");
+        default_panic(info);
+    }));
 }

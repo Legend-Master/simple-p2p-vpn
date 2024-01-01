@@ -1,8 +1,8 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{
-    get_formatted_time, get_mac_addresses, receive_until_success, send, log,
-    Message,
+    get_formatted_time, get_mac_addresses, log, receive_until_success, send,
+    setup_panic_logging_hook, Message,
 };
 use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -58,6 +58,8 @@ struct Cli {
 
 fn main() {
     let config: Cli = argh::from_env();
+
+    setup_panic_logging_hook();
 
     log!("Starting up TAP device");
     let tap_device = &setup_tap();
