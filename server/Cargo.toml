@@ -10,3 +10,8 @@ argh = "0.1.12"
 macaddr = { version = "1.0.1", features = ["serde"] }
 shared = { path = "../shared" }
 socket2 = "0.5.5"
+time = { version = "0.3.31", features = [
+    "macros",
+    "formatting",
+    "local-offset",
+] }

@@ -1,6 +1,8 @@
 use macaddr::MacAddr6;
 use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
+use time::macros::format_description;
+use time::OffsetDateTime;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Message {
@@ -88,4 +90,21 @@ pub fn receive_until_success(socket: &UdpSocket) -> ReceiveMessage {
         //     sleep(Duration::from_millis(100));
         // }
     }
+}
+
+pub fn get_formatted_time() -> String {
+    OffsetDateTime::now_local()
+        .unwrap()
+        .format(format_description!(
+            "[month]-[day] [hour]:[minute]:[second]"
+        ))
+        .unwrap()
+}
+
+#[macro_export]
+macro_rules! log {
+    ($($arg:tt)*) => {
+        let now = get_formatted_time();
+        println!("[{now}] {}", format_args!($($arg)*));
+    };
 }
