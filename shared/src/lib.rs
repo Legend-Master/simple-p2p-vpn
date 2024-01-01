@@ -1,8 +1,7 @@
+use chrono::Local;
 use macaddr::MacAddr6;
 use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
-use time::macros::format_description;
-use time::OffsetDateTime;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Message {
@@ -93,12 +92,7 @@ pub fn receive_until_success(socket: &UdpSocket) -> ReceiveMessage {
 }
 
 pub fn get_formatted_time() -> String {
-    OffsetDateTime::now_local()
-        .unwrap()
-        .format(format_description!(
-            "[year]-[month]-[day] [hour]:[minute]:[second]"
-        ))
-        .unwrap()
+    Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 #[macro_export]
