@@ -1,6 +1,9 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
-use shared::{get_mac_addresses, receive_until_success, send_to, Message, ReceiveMessage};
+use shared::{
+    get_formatted_time, get_mac_addresses, log, receive_until_success, send_to,
+    setup_panic_logging_hook, Message, ReceiveMessage,
+};
 use socket2::{Domain, Socket, Type};
 use std::{
     collections::{HashMap, HashSet},
@@ -31,6 +34,8 @@ struct Cli {
 fn main() {
     let config: Cli = argh::from_env();
 
+    setup_panic_logging_hook();
+
     let ip_pool: Mutex<HashSet<Ipv4Addr>> = Mutex::new(generate_ip_pool());
     let connections: Mutex<HashMap<MacAddr6, Connection>> = Mutex::new(HashMap::new());
 
@@ -47,7 +52,7 @@ fn main() {
                 .expect(&format!("Can't bind to address {address}"));
             let socket: UdpSocket = socket.into();
 
-            println!("Server listening at [::]:{}", config.port);
+            log!("Server listening at [::]:{}", config.port);
 
             loop {
                 handle_message(&socket, &connections, &ip_pool);
@@ -96,7 +101,7 @@ fn reassign_ip(
                 },
                 &source_address,
             );
-            println!("Reassign IP {ip} to {source_address}", ip = connection.ip);
+            log!("Reassign IP {ip} to {source_address}", ip = connection.ip);
             true
         }
         None => false,
@@ -110,14 +115,14 @@ fn register(
     socket: &UdpSocket,
     ip_pool: &Mutex<HashSet<Ipv4Addr>>,
 ) {
-    println!("Incomming client {mac_address} from {source_address}");
+    log!("Incomming client {mac_address} from {source_address}");
 
     if reassign_ip(connections, mac_address, source_address, socket) {
         return;
     }
 
     if let Some(ip) = get_ip(ip_pool) {
-        println!("Assign IP {ip} to {source_address}");
+        log!("Assign IP {ip} to {source_address}");
         send_to(
             socket,
             &Message::RegisterSuccess {
@@ -165,7 +170,7 @@ fn handle_message(
             // dbg!(&ethernet_frame);
         }
         Message::Ping => {
-            // println!("ping from {source_address}");
+            // log!("ping from {source_address}");
             if let Some((_, connection)) = connections
                 .lock()
                 .unwrap()
@@ -190,7 +195,7 @@ fn forward_data(
 ) {
     if let Ok((source_mac_address, destination_mac_address)) = get_mac_addresses(&ethernet_frame) {
         let send = |connection: &Connection| {
-            // println!(
+            // log!(
             //     "forwarding to {} ({})",
             //     &connection.socket_address, &connection.ip
             // );
@@ -226,9 +231,10 @@ fn purge_timedout_connections(
         if !should_keep {
             // Release ip from peer
             ip_pool.lock().unwrap().insert(connection.ip);
-            println!(
+            log!(
                 "purged {} from {}",
-                connection.ip, connection.socket_address
+                connection.ip,
+                connection.socket_address
             );
         }
         return should_keep;

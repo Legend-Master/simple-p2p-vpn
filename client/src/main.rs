@@ -1,6 +1,9 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
-use shared::{get_mac_addresses, receive_until_success, send, Message};
+use shared::{
+    get_formatted_time, get_mac_addresses, log, receive_until_success, send,
+    setup_panic_logging_hook, Message,
+};
 use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::sleep;
@@ -56,11 +59,13 @@ struct Cli {
 fn main() {
     let config: Cli = argh::from_env();
 
-    println!("Starting up TAP device");
-    let tap_device = &setup_tap();
-    println!("TAP device started");
+    setup_panic_logging_hook();
 
-    println!("Connecting to server {}", config.server);
+    log!("Starting up TAP device");
+    let tap_device = &setup_tap();
+    log!("TAP device started");
+
+    log!("Connecting to server {}", config.server);
     let socket = &setup_socket(&config.server);
 
     let (register_sender, register_receiver) = mpsc::channel();
@@ -97,22 +102,22 @@ fn handle_message(
 ) {
     match receive_until_success(socket).message {
         Message::Data { ethernet_frame } => {
-            // println!("received data packet");
+            // log!("received data packet");
             // let time = Instant::now();
             match tap_device.write_non_mut(&ethernet_frame) {
                 Ok(bytes_written) => {
                     if bytes_written < ethernet_frame.len() {
-                        println!(
+                        log!(
                             "{bytes_written} bytes recieved but only {} bytes written to TAP",
                             ethernet_frame.len()
                         );
                     }
                 }
                 Err(error) => {
-                    println!("Can't write to TAP with error: {error}");
+                    log!("Can't write to TAP with error: {error}");
                 }
             }
-            // println!(
+            // log!(
             //     "wrote {} bytes to TAP device in {:?}",
             //     ethernet_frame.len(),
             //     time.elapsed()
@@ -147,10 +152,10 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
                 match get_mac_addresses(ethernet_frame) {
                     Ok((source_mac_address, _)) => {
                         if source_mac_address != mac_address {
-                            println!("not device source mac? {source_mac_address}");
+                            log!("not device source mac? {source_mac_address}");
                             continue;
                         };
-                        // println!(
+                        // log!(
                         //     "TAP packet ({bytes_read} bytes) received (source: {source_mac_address}, dest: {destination_mac_address})"
                         // );
                         send(
@@ -162,13 +167,13 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
                     }
                     Err(_) => {
                         // Invalid packet
-                        println!("only {bytes_read} bytes read from TAP, ignoring");
+                        log!("only {bytes_read} bytes read from TAP, ignoring");
                         continue;
                     }
                 }
             }
             Err(error) => {
-                println!("Can't read from TAP: {error}");
+                log!("Can't read from TAP: {error}");
                 continue;
             }
         }
@@ -189,11 +194,11 @@ fn register(
         if let Ok(result) = register_receiver.recv_timeout(Duration::from_secs(5)) {
             match result {
                 RegisterResult::Success { ip, subnet_mask } => {
-                    println!("Connected, server gave us {ip}, setting it to TAP");
+                    log!("Connected, server gave us {ip}, setting it to TAP");
                     tap_device
                         .set_ip(ip, subnet_mask)
                         .expect("Failed to set TAP IP");
-                    println!("Set TAP IP to {ip} successfully");
+                    log!("Set TAP IP to {ip} successfully");
                     return Ok(());
                 }
                 RegisterResult::Fail { reason } => {
@@ -218,18 +223,18 @@ fn ping(
         clear_receiver(pong_receiver);
         if let Ok(_) = pong_receiver.recv_timeout(Duration::from_secs(5)) {
             // Pong received
-            // println!("Pong received");
+            // log!("Pong received");
             return;
         }
     }
     // If didn't get a pong then we probably lost connection to server
     // try re-register
-    println!("Lost connection to server, trying to re-register");
+    log!("Lost connection to server, trying to re-register");
     if let Err(reason) = register(socket, tap_device, register_receiver) {
-        // println!("Re-register failed: {reason}");
+        // log!("Re-register failed: {reason}");
         panic!("Re-register failed: {reason}");
     }
-    println!("Re-register success");
+    log!("Re-register success");
 }
 
 fn clear_receiver<T>(receiver: &Receiver<T>) {

@@ -9,6 +9,11 @@ edition = "2021"
 argh = "0.1.12"
 macaddr = { version = "1.0.1", features = ["serde"] }
 shared = { path = "../shared" }
+time = { version = "0.3.31", features = [
+    "macros",
+    "formatting",
+    "local-offset",
+] }
 
 [target.'cfg(windows)'.dependencies]
 # tap-windows = "*"
