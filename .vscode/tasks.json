@@ -34,9 +34,9 @@
 					]
 				}
 			},
-			"command": "scripts/buid-server.sh",
+			"command": "scripts/buid-release.sh",
 			"problemMatcher": "$rustc",
-			"label": "wsl build server release"
+			"label": "wsl build release"
 		},
 	]
 }
