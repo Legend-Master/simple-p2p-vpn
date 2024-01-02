@@ -1,3 +1,5 @@
+mod tap_device;
+
 use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{
@@ -9,27 +11,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::{net::UdpSocket, thread};
-use tap_windows::{Device, HARDWARE_ID};
-
-#[cfg(target_os = "windows")]
-fn setup_tap() -> Device {
-    const INTERFACE_NAME: &str = "Simple Peer To Peer";
-    // Try to open the device
-    let tap_device = Device::open(HARDWARE_ID, INTERFACE_NAME)
-        .or_else(|_| -> std::io::Result<_> {
-            // The device does not exists...
-            // try creating a new one
-
-            let dev = Device::create(HARDWARE_ID)?;
-            dev.set_name(INTERFACE_NAME)?;
-
-            Ok(dev)
-        })
-        // Everything failed, just panic
-        .expect("Failed to open TAP");
-    tap_device.up().expect("Failed to turn on TAP");
-    return tap_device;
-}
+use tap_device::{setup_tap, Device, TapDevice};
 
 fn setup_socket(server: &SocketAddr) -> UdpSocket {
     let bind_address = match server {

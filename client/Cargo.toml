@@ -11,7 +11,10 @@ chrono = "0.4.31"
 macaddr = { version = "1.0.1", features = ["serde"] }
 shared = { path = "../shared" }
 
-[target.'cfg(windows)'.dependencies]
-# tap-windows = "*"
+[target.'cfg(target_os = "windows")'.dependencies]
 tap-windows = { git = "https://github.com/Legend-Master/tap-windows" }
 # tap-windows = { path = "../../tap-windows" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.27.1", features = ["net"] }
+tun-tap = { version = "0.1.4", default-features = false }

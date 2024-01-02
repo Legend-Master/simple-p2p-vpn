@@ -6,7 +6,8 @@ Some notes:
 
 - Broadcast support, it can be used to play some old games in LAN mode multiplayer
 - No encryption, it doesn't provide a secure tunnel like other VPNs
-- Currently client is only supported on x86_64 Windows, and server is only supported on x86_64 Windows and x86_64 Linux
+- Currently only support x86_64 Windows and Linux
+- No Mac support because I don't own one
 
 > Currently working in progress, just a proof of concept
 
@@ -47,7 +48,7 @@ if not "%1"=="am_admin" (powershell start -verb runas '%0' am_admin & exit /b)
 ## TODO
 
 - [ ] Arm CPU support
-- [ ] Linux TAP support
+- [x] Linux TAP support
 - [ ] Encryption
 - [ ] Handle errors instead of `unwrap` all over the place
 - [ ] Doing IO asynchronously
