@@ -113,7 +113,7 @@ impl TapDevice for Device {
 
         let mut cidr_suffix = 0;
         for octet in mask.octets() {
-            cidr_suffix += octet.count_ones();
+            cidr_suffix += octet.leading_ones();
             if octet < 255 {
                 break;
             }
