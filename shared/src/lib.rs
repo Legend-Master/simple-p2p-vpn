@@ -31,7 +31,7 @@ pub fn send(socket: &UdpSocket, message: &Message) {
     }
     // let bytes_written = socket.send(payload).unwrap();
     // if bytes_written < payload.len() {
-    //     println!(
+    //     log!(
     //         "should send {} bytes but only {bytes_written} bytes sent",
     //         payload.len()
     //     );
@@ -46,7 +46,7 @@ pub fn send_to(socket: &UdpSocket, message: &Message, to_address: &SocketAddr) {
     }
     // let bytes_written = socket.send(payload).unwrap();
     // if bytes_written < payload.len() {
-    //     println!(
+    //     log!(
     //         "should send {} bytes but only {bytes_written} bytes sent",
     //         payload.len()
     //     );
@@ -80,12 +80,12 @@ pub fn receive_until_success(socket: &UdpSocket) -> ReceiveMessage {
                     }
                 }
                 Err(error) => {
-                    println!("Can't decode packet with bincode, error: {error}");
+                    log!("Can't decode packet with bincode, error: {error}");
                 }
             }
         }
         // else {
-        //     println!("recv_from error");
+        //     log!("recv_from error");
         //     sleep(Duration::from_millis(100));
         // }
     }
