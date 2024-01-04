@@ -45,6 +45,45 @@ And you can add [this line](https://stackoverflow.com/a/51472107/16993372) at th
 if not "%1"=="am_admin" (powershell start -verb runas '%0' am_admin & exit /b)
 ```
 
+Also, you can use task scheduler to run as admin without UAC prompt
+
+```batch
+@REM connect.batch
+
+set task_name="Simple P2P Connect Example"
+set command="%~dp0client.exe example.com:1234"
+
+@REM Check admin: https://stackoverflow.com/a/11995662/16993372
+net session >nul 2>&1
+if %errorlevel% == 0 (
+    @REM is admin
+    @REM /sc ONCE: Run once at a specified date and time.
+    @REM /st 00:00: Start time for the task (setting it to the past so it never triggers)
+    @REM /f: Overwrites existing task with the same name
+    @REM /rl HIGHEST: Run as admin
+    @REM /tr command: Task command
+    schtasks /create /tn %task_name% /sc ONCE /st 00:00 /f /rl HIGHEST /tr %command%
+    schtasks /run /tn %task_name%
+    exit
+)
+@REM not admin
+schtasks /run /tn %task_name%
+if not %errorlevel% == 0 (
+    @REM Task not setup yet
+    powershell Start-Process '%0' -Verb RunAs
+)
+```
+
+```batch
+@REM cleanup.batch
+
+if not "%1"=="am_admin" (powershell start -verb runas '%0' am_admin & exit /b)
+
+set task_name="Simple P2P Connect Example"
+@REM /f for no confirmation
+schtasks /delete /tn %task_name% /f
+```
+
 ## TODO
 
 - [ ] Arm CPU support
