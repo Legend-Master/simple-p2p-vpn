@@ -51,7 +51,7 @@ Also, you can use task scheduler to run as admin without UAC prompt
 @REM connect.batch
 
 set task_name="Simple P2P Connect Example"
-set command="%~dp0client.exe example.com:1234"
+set command="\"%~dp0client.exe\" example.com:1234"
 
 @REM Check admin: https://stackoverflow.com/a/11995662/16993372
 net session >nul 2>&1
