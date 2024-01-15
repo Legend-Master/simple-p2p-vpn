@@ -1,4 +1,4 @@
-name: Build Release
+name: Build Release With Unstable Rust Features
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-release:
+  build:
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest]
@@ -37,8 +37,10 @@ jobs:
         with:
           name: ${{ matrix.os-name }}-client
           path: ./target/${{ matrix.target }}/release/client${{ matrix.executable-extension }}
+          compression-level: 0
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os-name }}-server
           path: ./target/${{ matrix.target }}/release/server${{ matrix.executable-extension }}
+          compression-level: 0
