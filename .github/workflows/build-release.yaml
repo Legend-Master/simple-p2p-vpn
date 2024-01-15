@@ -1,0 +1,50 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            os-name: windows
+            executable-extension: .exe
+          - os: ubuntu-latest
+            os-name: linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os-name }}-client
+          path: ./target/release/client${{ matrix.executable-extension }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os-name }}-server
+          path: ./target/release/server${{ matrix.executable-extension }}
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+      - uses: softprops/action-gh-release@v1
