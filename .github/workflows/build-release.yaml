@@ -45,19 +45,12 @@ jobs:
       - name: Build
         run: cargo +nightly build -Z build-std=std,panic_abort --target x86_64-unknown-linux-gnu --release
 
-      - run: |
-          ls -a
-          cd target
-          ls -a
-          cd release
-          ls -a
-
       - uses: actions/upload-artifact@v4
         with:
           name: linux-client
-          path: ./target/release/client
+          path: ./target/x86_64-unknown-linux-gnu/release/client
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-server
-          path: ./target/release/server
+          path: ./target/x86_64-unknown-linux-gnu/release/server
