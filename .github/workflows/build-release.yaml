@@ -24,12 +24,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-client
-          path: target/release/client.exe
+          path: ./target/release/client.exe
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-server
-          path: target/release/server.exe
+          path: ./target/release/server.exe
 
   build-linux:
     runs-on: ubuntu-latest
@@ -48,9 +48,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux-client
-          path: target/release/client
+          path: ./target/release/client
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-server
-          path: target/release/server
+          path: ./target/release/server
