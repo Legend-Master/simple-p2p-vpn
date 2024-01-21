@@ -232,7 +232,7 @@ fn purge_timedout_connections(
             // Release ip from peer
             ip_pool.lock().unwrap().insert(connection.ip);
             log!(
-                "purged {} from {}",
+                "Purged {} from {}",
                 connection.ip,
                 connection.socket_address
             );

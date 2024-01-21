@@ -134,7 +134,7 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
                 match get_mac_addresses(ethernet_frame) {
                     Ok((source_mac_address, _)) => {
                         if source_mac_address != mac_address {
-                            log!("not device source mac? {source_mac_address}");
+                            log!("Not device source mac? {source_mac_address}");
                             continue;
                         };
                         // log!(
@@ -149,7 +149,7 @@ fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
                     }
                     Err(_) => {
                         // Invalid packet
-                        log!("only {bytes_read} bytes read from TAP, ignoring");
+                        log!("Only {bytes_read} bytes read from TAP, ignoring");
                         continue;
                     }
                 }
