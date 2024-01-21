@@ -89,6 +89,7 @@ schtasks /delete /tn %task_name% /f
 - [ ] Arm CPU support
 - [x] Linux TAP support
 - [ ] Encryption
-- [ ] Handle errors instead of `unwrap` all over the place
+- [x] Handle errors instead of `unwrap` all over the place
 - [ ] Doing IO asynchronously
 - [x] IPv6 support
+- [ ] Support `--version` command line argument
