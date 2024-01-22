@@ -170,7 +170,7 @@ fn handle_message(
             // dbg!(&ethernet_frame);
         }
         Message::Ping => {
-            // log!("ping from {source_address}");
+            // log!("Ping from {source_address}");
             if let Some((_, connection)) = connections
                 .lock()
                 .unwrap()
@@ -196,7 +196,7 @@ fn forward_data(
     if let Ok((source_mac_address, destination_mac_address)) = get_mac_addresses(&ethernet_frame) {
         let send = |connection: &Connection| {
             // log!(
-            //     "forwarding to {} ({})",
+            //     "Forwarding to {} ({})",
             //     &connection.socket_address, &connection.ip
             // );
             send_to(

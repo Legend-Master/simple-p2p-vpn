@@ -18,8 +18,8 @@ fn setup_socket(server: &SocketAddr) -> UdpSocket {
         SocketAddr::V4(_) => "0.0.0.0:0",
         SocketAddr::V6(_) => "[::]:0",
     };
-    let socket = UdpSocket::bind(bind_address).expect("couldn't bind to address");
-    socket.connect(server).expect("couldn't connect to address");
+    let socket = UdpSocket::bind(bind_address).expect("Can't bind to address");
+    socket.connect(server).expect("Can't connect to address");
     return socket;
 }
 
@@ -124,7 +124,7 @@ fn handle_message(
 }
 
 fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
-    let mac_address = MacAddr6::from(tap_device.get_mac().unwrap());
+    let mac_address = MacAddr6::from(tap_device.get_mac().expect("Can't get TAP MAC address"));
     let mtu = tap_device.get_mtu().unwrap_or(1500);
     let mut buffer = vec![0; mtu as usize];
     loop {
