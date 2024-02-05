@@ -59,7 +59,7 @@ fn main() {
         });
 
         if let Err(reason) = register(socket, tap_device, &register_receiver) {
-            panic!("Re-register failed: {reason}");
+            panic!("Register failed: {reason}");
         }
 
         scope.spawn(|| read_and_send(tap_device, socket));
