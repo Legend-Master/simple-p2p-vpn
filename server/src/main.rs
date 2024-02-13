@@ -160,7 +160,7 @@ fn handle_message(
     let ReceiveMessage {
         message,
         source_address,
-    } = receive_until_success(&socket);
+    } = receive_until_success(socket);
     match message {
         Message::Register { mac_address } => {
             register(mac_address, source_address, connections, socket, ip_pool);

@@ -1,7 +1,6 @@
 mod tap_device;
 
 use argh::FromArgs;
-use macaddr::MacAddr6;
 use shared::{
     get_formatted_time, get_mac_addresses, log, receive_until_success, send,
     setup_panic_logging_hook, Message,
@@ -20,7 +19,7 @@ fn setup_socket(server: &SocketAddr) -> UdpSocket {
     };
     let socket = UdpSocket::bind(bind_address).expect("Can't bind to address");
     socket.connect(server).expect("Can't connect to address");
-    return socket;
+    socket
 }
 
 fn resolve_host(hostname_port: &str) -> Result<SocketAddr, String> {
@@ -124,7 +123,7 @@ fn handle_message(
 }
 
 fn read_and_send(tap_device: &Device, socket: &UdpSocket) -> ! {
-    let mac_address = MacAddr6::from(tap_device.get_mac().expect("Can't get TAP MAC address"));
+    let mac_address = tap_device.get_mac().expect("Can't get TAP MAC address");
     let mtu = tap_device.get_mtu().unwrap_or(1500);
     let mut buffer = vec![0; mtu as usize];
     loop {
@@ -167,7 +166,7 @@ fn register(
     tap_device: &Device,
     register_receiver: &Receiver<RegisterResult>,
 ) -> Result<(), String> {
-    let mac_address = MacAddr6::from(tap_device.get_mac().unwrap());
+    let mac_address = tap_device.get_mac().unwrap();
     // Retry register for 15 seconds
     let start_time = Instant::now();
     while start_time.elapsed() < Duration::from_secs(15) {
@@ -189,7 +188,7 @@ fn register(
             }
         }
     }
-    return Err("Timeout".to_owned());
+    Err("Timeout".to_owned())
 }
 
 fn ping(
@@ -203,7 +202,7 @@ fn ping(
     while start_time.elapsed() < Duration::from_secs(15) {
         send(socket, &Message::Ping);
         clear_receiver(pong_receiver);
-        if let Ok(_) = pong_receiver.recv_timeout(Duration::from_secs(5)) {
+        if pong_receiver.recv_timeout(Duration::from_secs(5)).is_ok() {
             // Pong received
             // log!("Pong received");
             return;
@@ -220,5 +219,5 @@ fn ping(
 }
 
 fn clear_receiver<T>(receiver: &Receiver<T>) {
-    while let Ok(_) = receiver.try_recv() {}
+    while receiver.try_recv().is_ok() {}
 }
