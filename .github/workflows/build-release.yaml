@@ -35,7 +35,7 @@ jobs:
           mv ./target/release/client${{ matrix.executable-extension }} ${{ matrix.os-name }}-client${{ matrix.executable-extension }}
           mv ./target/release/server${{ matrix.executable-extension }} ${{ matrix.os-name }}-server${{ matrix.executable-extension }}
 
-      - uses: softprops/action-gh-release@v1
+      - uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ matrix.os-name }}-client${{ matrix.executable-extension }}
