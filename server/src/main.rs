@@ -194,18 +194,13 @@ fn forward_data(
     connections: &Mutex<HashMap<MacAddr6, Connection>>,
 ) {
     if let Ok((source_mac_address, destination_mac_address)) = get_mac_addresses(&ethernet_frame) {
+        let message = &Message::Data { ethernet_frame };
         let send = |connection: &Connection| {
             // log!(
             //     "Forwarding to {} ({})",
             //     &connection.socket_address, &connection.ip
             // );
-            send_to(
-                socket,
-                &Message::Data {
-                    ethernet_frame: ethernet_frame.clone(),
-                },
-                &connection.socket_address,
-            );
+            send_to(socket, message, &connection.socket_address);
         };
         // Broadcast is a special type of multicast
         if destination_mac_address.is_multicast() {
@@ -237,6 +232,6 @@ fn purge_timedout_connections(
                 connection.socket_address
             );
         }
-        return should_keep;
+        should_keep
     });
 }
