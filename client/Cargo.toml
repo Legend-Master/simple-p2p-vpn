@@ -16,5 +16,5 @@ tap-windows = { git = "https://github.com/Legend-Master/tap-windows" }
 # tap-windows = { path = "../../tap-windows" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-nix = { version = "0.28", features = ["net"] }
+nix = { version = "0.29", features = ["net"] }
 tun-tap = { version = "0.1.4", default-features = false }
