@@ -77,7 +77,7 @@ pub fn receive_until_success(socket: &UdpSocket) -> ReceiveMessage {
                     return ReceiveMessage {
                         message,
                         source_address,
-                    }
+                    };
                 }
                 Err(error) => {
                     log!("Can't decode packet with bincode, error: {error}");

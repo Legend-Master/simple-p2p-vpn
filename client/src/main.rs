@@ -2,15 +2,15 @@ mod tap_device;
 
 use argh::FromArgs;
 use shared::{
-    get_formatted_time, get_mac_addresses, log, receive_until_success, send,
-    setup_panic_logging_hook, Message,
+    Message, get_formatted_time, get_mac_addresses, log, receive_until_success, send,
+    setup_panic_logging_hook,
 };
 use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::{net::UdpSocket, thread};
-use tap_device::{setup_tap, Device, TapDevice};
+use tap_device::{Device, TapDevice, setup_tap};
 
 fn setup_socket(server: &SocketAddr) -> UdpSocket {
     let bind_address = match server {
@@ -53,8 +53,10 @@ fn main() {
     let (pong_sender, pong_receiver) = mpsc::channel();
 
     thread::scope(|scope| {
-        scope.spawn(move || loop {
-            handle_message(socket, tap_device, &register_sender, &pong_sender);
+        scope.spawn(move || {
+            loop {
+                handle_message(socket, tap_device, &register_sender, &pong_sender);
+            }
         });
 
         if let Err(reason) = register(socket, tap_device, &register_receiver) {
@@ -63,9 +65,11 @@ fn main() {
 
         scope.spawn(|| read_and_send(tap_device, socket));
 
-        scope.spawn(move || loop {
-            sleep(Duration::from_secs(5));
-            ping(socket, tap_device, &register_receiver, &pong_receiver);
+        scope.spawn(move || {
+            loop {
+                sleep(Duration::from_secs(5));
+                ping(socket, tap_device, &register_receiver, &pong_receiver);
+            }
         });
     });
 }

@@ -1,8 +1,8 @@
 use argh::FromArgs;
 use macaddr::MacAddr6;
 use shared::{
-    get_formatted_time, get_mac_addresses, log, receive_until_success, send_to,
-    setup_panic_logging_hook, Message, ReceiveMessage,
+    Message, ReceiveMessage, get_formatted_time, get_mac_addresses, log, receive_until_success,
+    send_to, setup_panic_logging_hook,
 };
 use socket2::{Domain, Socket, Type};
 use std::{
@@ -60,9 +60,11 @@ fn main() {
         });
 
         // Purge timed out connections
-        scope.spawn(|| loop {
-            sleep(Duration::from_secs(100));
-            purge_timedout_connections(&connections, &ip_pool);
+        scope.spawn(|| {
+            loop {
+                sleep(Duration::from_secs(100));
+                purge_timedout_connections(&connections, &ip_pool);
+            }
         });
     });
 }
