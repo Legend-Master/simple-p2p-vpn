@@ -25,32 +25,26 @@ pub fn get_mac_addresses(ethernet_frame: &[u8]) -> Result<(MacAddr6, MacAddr6), 
 
 pub fn send(socket: &UdpSocket, message: &Message) {
     let payload = &bincode::serialize(message).unwrap();
-    let mut bytes_written = 0;
-    while bytes_written < payload.len() {
-        bytes_written += socket.send(payload).unwrap();
+    let bytes_written = socket.send(payload).unwrap();
+    if bytes_written < payload.len() {
+        // Not entirely sure when will this happen
+        log!(
+            "should send {} bytes but only {bytes_written} bytes sent",
+            payload.len()
+        );
     }
-    // let bytes_written = socket.send(payload).unwrap();
-    // if bytes_written < payload.len() {
-    //     log!(
-    //         "should send {} bytes but only {bytes_written} bytes sent",
-    //         payload.len()
-    //     );
-    // }
 }
 
 pub fn send_to(socket: &UdpSocket, message: &Message, to_address: &SocketAddr) {
     let payload = &bincode::serialize(message).unwrap();
-    let mut bytes_written = 0;
-    while bytes_written < payload.len() {
-        bytes_written += socket.send_to(payload, to_address).unwrap();
+    let bytes_written = socket.send_to(payload, to_address).unwrap();
+    if bytes_written < payload.len() {
+        // Not entirely sure when will this happen
+        log!(
+            "should send {} bytes but only {bytes_written} bytes sent",
+            payload.len()
+        );
     }
-    // let bytes_written = socket.send(payload).unwrap();
-    // if bytes_written < payload.len() {
-    //     log!(
-    //         "should send {} bytes but only {bytes_written} bytes sent",
-    //         payload.len()
-    //     );
-    // }
 }
 
 pub struct ReceiveMessage {
